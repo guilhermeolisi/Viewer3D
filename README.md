@@ -110,6 +110,14 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
 - **Styles.** Ball and stick draws each sphere at `BallScale` times the atom radius, with rods. Space filling has no
   rods and multiplies every radius by s = min over the bonds of d / (r1 + r2), so the closest bonded pair touches
   and no bonded pair overlaps; without bonds, s comes from the shortest distance in one cell.
+- **Polyhedra.** `CrystalStructure.Polyhedra` holds coordination polyhedra computed by the owner (a center, its
+  vertices as atoms with a cell translation, and the faces counter-clockwise seen from outside; the layer does not
+  compute hulls). The `Polyhedra` style (ball and stick) and `PolyhedraWithEllipsoids` (thermal ellipsoids) draw each
+  one around every drawn image of its center as a translucent mesh (`PolyhedronOpacity`) with its edges; a vertex
+  outside the block is a faded sphere. `ShowPolyhedronVertices`, `ShowBondsInsidePolyhedra`, `PolyhedronBackFaces`
+  and `EnabledPolyhedra` choose what is drawn. Faces are ordered back to front per triangle, which is right for convex
+  polyhedra that only share vertices, edges or faces. Against the 3000 ceiling a polyhedron counts as 8 spheres.
+  Run `Viewer3D.Sample --bench-polyhedra N` in Release to time N octahedra.
 - **Elements.** `ElementTable` has color and radius for Z 1 to 118: the Jmol colors as published by
   [pymatgen](https://github.com/materialsproject/pymatgen) (MIT), the metallic radius of pymatgen for metals and the
   covalent radius of Cordero et al. (Dalton Trans., 2008, 2832) for the other elements. Values without a reference

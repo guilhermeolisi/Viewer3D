@@ -16,6 +16,15 @@
   (`CrystalAtom.Displacements`) at a probability level of 30, 50, 70 or 90% (`ProbabilityScale`), with thin rods cut
   at the surfaces; a tensor that is not positive definite is a small cube and an atom without data a dashed sphere.
 - `Viewer3D.Sample`: `--bench-ellipsoids N` times a frame of N ellipsoids.
+- `Viewer3D`: `MeshItem.Edges` draws only the given edges of a mesh (the edges of a polyhedron, not the diagonals of
+  its faces), cut out where they enter a sphere and painted after the faces they border; picking one reports the mesh.
+  A mesh color with alpha below 255 gives translucent faces, and the picker then prefers an opaque item seen through
+  them.
+- `Viewer3D.Crystal`: the `Polyhedra` and `PolyhedraWithEllipsoids` styles draw the coordination polyhedra given in
+  `CrystalStructure.Polyhedra` (the layer does not compute hulls) as translucent meshes with their edges around every
+  drawn image of their centers, with options for the opacity, the vertex atoms, the rods inside, the back faces and
+  which polyhedra are drawn. `CrystalItemKind.Polyhedron` and `CrystalItemInfo.PolyhedronIndex` report a click on one.
+- `Viewer3D.Sample`: `--bench-polyhedra N` times a frame of N translucent octahedra.
 
 ## 0.1.0 - 10/17/2026
 

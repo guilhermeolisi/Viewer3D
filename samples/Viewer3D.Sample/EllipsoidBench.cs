@@ -53,7 +53,7 @@ internal static class EllipsoidBench
         Console.WriteLine($"{name,-28} {prepare,7:F2}   {render,10:F2}");
     }
 
-    static double Median(Action action)
+    internal static double Median(Action action)
     {
         for (int k = 0; k < Warmup; k++)
             action();

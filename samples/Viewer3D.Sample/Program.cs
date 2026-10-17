@@ -2,6 +2,7 @@
 // Usage: Viewer3D.Sample             opens the window
 //        Viewer3D.Sample --export DIR writes the README images to DIR
 //        Viewer3D.Sample --bench-ellipsoids N times a frame of N ellipsoids (run in Release)
+//        Viewer3D.Sample --bench-polyhedra N  times a frame of N translucent octahedra (run in Release)
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -25,6 +26,13 @@ internal static class Program
         {
             builder.SetupWithoutStarting();
             EllipsoidBench.Run(bench + 1 < args.Length && int.TryParse(args[bench + 1], out int n) ? n : 2000);
+            return 0;
+        }
+        int polyhedra = Array.IndexOf(args, "--bench-polyhedra");
+        if (polyhedra >= 0)
+        {
+            builder.SetupWithoutStarting();
+            PolyhedronBench.Run(polyhedra + 1 < args.Length && int.TryParse(args[polyhedra + 1], out int n) ? n : 500);
             return 0;
         }
         int export = Array.IndexOf(args, "--export");
