@@ -22,7 +22,8 @@ namespace Viewer3D.Crystal;
 /// <para>
 /// In space filling the spheres are scaled by s = min over the bonds of d / (r1 + r2), the scale at which the closest
 /// bonded pair just touches. Without bonds, s comes from the shortest distance between two atoms of one cell (with
-/// their neighbors in the 26 cells around), so it never depends on the repetition.
+/// their neighbors in the 26 cells around), so it never depends on the repetition. <see cref="CrystalPacking"/> gives the
+/// same scale and the fraction of the cell the spheres fill.
 /// </para>
 /// <para>
 /// In thermal ellipsoids each atom is drawn from its displacement tensors, the same for every image, as each image is
@@ -81,7 +82,44 @@ public sealed class CrystalSceneBuilder
     }
 
     /// <summary>An atom reduced to [0, 1): its position and the translation the reduction took off.</summary>
-    readonly record struct Reduced(double X, double Y, double Z, LatticeShift Floor);
+    internal readonly record struct Reduced(double X, double Y, double Z, LatticeShift Floor);
+
+    /// <summary>The element with the largest share of the site; the atom's own element without shares.</summary>
+    internal static string MainElement(CrystalAtom atom)
+    {
+        if (atom.Shares is not { Count: > 0 } shares)
+            return atom.Element;
+        ElementShare main = shares[0];
+        foreach (ElementShare share in shares)
+        {
+            if (share.Fraction > main.Fraction)
+                main = share;
+        }
+        return main.Element;
+    }
+
+    internal static Reduced Reduce(double x, double y, double z)
+    {
+        (double rx, int fx) = Wrap(x);
+        (double ry, int fy) = Wrap(y);
+        (double rz, int fz) = Wrap(z);
+        return new Reduced(rx, ry, rz, new LatticeShift(fx, fy, fz));
+    }
+
+    /// <summary>The coordinate in [0, 1) and the whole cells taken off; a value within 1e-6 below 1 wraps to 0.</summary>
+    static (double, int) Wrap(double v)
+    {
+        if (!double.IsFinite(v))
+            return (0, 0);
+        double f = Math.Floor(v);
+        double r = v - f;
+        if (r > 1 - 1e-6)
+        {
+            r = 0;
+            f += 1;
+        }
+        return (r, (int)f);
+    }
 
     sealed class Context
     {
@@ -112,7 +150,7 @@ public sealed class CrystalSceneBuilder
                 CrystalAtom atom = atoms[i];
                 reduced[i] = Reduce(atom.X, atom.Y, atom.Z);
                 string main = MainElement(atom);
-                radius[i] = atom.Radius is double r && r > 0 ? r : ElementTable.TryGet(main, out ElementInfo e) ? e.Radius : 1.0;
+                radius[i] = CrystalPacking.RadiusOf(atom);
                 color[i] = ColorOf(main);
                 sectors[i] = SectorsOf(atom);
             }
@@ -128,7 +166,9 @@ public sealed class CrystalSceneBuilder
             }
             else
             {
-                scale = options.Style == CrystalStyle.SpaceFilling ? TouchingScale() : options.BallScale;
+                scale = options.Style == CrystalStyle.SpaceFilling
+                    ? CrystalPacking.TouchingScale(structure, basis, reduced, radius)
+                    : options.BallScale;
             }
         }
 
@@ -544,36 +584,6 @@ public sealed class CrystalSceneBuilder
         LatticeShift ReducedShift(CrystalBond bond)
             => reduced[bond.Second].Floor + bond.Shift - reduced[bond.First].Floor;
 
-        double TouchingScale()
-        {
-            double best = double.PositiveInfinity;
-            IReadOnlyList<CrystalBond> bonds = structure.Bonds;
-            int count = structure.Atoms.Count;
-            foreach (CrystalBond bond in bonds)
-            {
-                if ((uint)bond.First >= (uint)count || (uint)bond.Second >= (uint)count)
-                    continue;
-                double d = Distance(bond.First, bond.Second, ReducedShift(bond));
-                if (d > 0)
-                    best = Math.Min(best, d / (radius[bond.First] + radius[bond.Second]));
-            }
-            if (double.IsFinite(best))
-                return best;
-            for (int i = 0; i < count; i++)
-                for (int j = i; j < count; j++)
-                    for (int a = -1; a <= 1; a++)
-                        for (int b = -1; b <= 1; b++)
-                            for (int c = -1; c <= 1; c++)
-                            {
-                                if (i == j && a == 0 && b == 0 && c == 0)
-                                    continue;
-                                double d = Distance(i, j, new LatticeShift(a, b, c));
-                                if (d > 1e-6)
-                                    best = Math.Min(best, d / (radius[i] + radius[j]));
-                            }
-            return double.IsFinite(best) ? best : 1.0;
-        }
-
         double Distance(int first, int second, LatticeShift shift)
         {
             Reduced p = reduced[first], q = reduced[second];
@@ -644,19 +654,6 @@ public sealed class CrystalSceneBuilder
             return ElementTable.TryGet(element, out ElementInfo e) ? e.Color : UnknownColor;
         }
 
-        static string MainElement(CrystalAtom atom)
-        {
-            if (atom.Shares is not { Count: > 0 } shares)
-                return atom.Element;
-            ElementShare main = shares[0];
-            foreach (ElementShare share in shares)
-            {
-                if (share.Fraction > main.Fraction)
-                    main = share;
-            }
-            return main.Element;
-        }
-
         IReadOnlyList<SphereSector>? SectorsOf(CrystalAtom atom)
         {
             if (atom.Shares is { Count: > 1 } shares)
@@ -667,28 +664,5 @@ public sealed class CrystalSceneBuilder
         }
 
         static Rgba Fade(Rgba c) => Rgba.Lerp(c, FadeTarget, 0.5f) with { A = FadedAlpha };
-
-        static Reduced Reduce(double x, double y, double z)
-        {
-            (double rx, int fx) = Wrap(x);
-            (double ry, int fy) = Wrap(y);
-            (double rz, int fz) = Wrap(z);
-            return new Reduced(rx, ry, rz, new LatticeShift(fx, fy, fz));
-        }
-
-        /// <summary>The coordinate in [0, 1) and the whole cells taken off; a value within 1e-6 below 1 wraps to 0.</summary>
-        static (double, int) Wrap(double v)
-        {
-            if (!double.IsFinite(v))
-                return (0, 0);
-            double f = Math.Floor(v);
-            double r = v - f;
-            if (r > 1 - 1e-6)
-            {
-                r = 0;
-                f += 1;
-            }
-            return (r, (int)f);
-        }
     }
 }

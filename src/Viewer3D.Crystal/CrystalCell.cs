@@ -60,6 +60,9 @@ internal readonly struct CellBasis
     /// <summary>Shortest of the three edges; zero for an invalid cell.</summary>
     public double MinEdge { get; }
 
+    /// <summary>Cell volume, in cubic angstrom (the product of the diagonal); zero for an invalid cell.</summary>
+    public double Volume => m00 * m11 * m22;
+
     CellBasis(double m00, double m01, double m02, double m11, double m12, double m22, double minEdge)
     {
         this.m00 = m00;
