@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Viewer3D.Crystal</RootNamespace>
+    <Description>Optional crystal layer for Viewer3D: a crystal structure (cell, atoms, bonds) turned into a scene of spheres, rods, cell edges and labels, in ball and stick or space filling, with element colors and radii for Z 1 to 118. No UI dependency.</Description>
+    <IsPackable>true</IsPackable>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageTags>$(PackageTags);crystal;crystallography;structure;ball-and-stick</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <EmbeddedResource Include="Data\elements.csv" LogicalName="Viewer3D.Crystal.elements.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Viewer3D.Crystal.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viewer3D\Viewer3D.csproj" />
+  </ItemGroup>
+
+</Project>
