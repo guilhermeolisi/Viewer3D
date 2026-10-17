@@ -53,6 +53,7 @@ public sealed class FramePreparer
     float[] vx = [], vy = [], vz = [], sx = [], sy = [];
     bool[] ok = [];
     readonly List<SphereItem> spheres = [];
+    readonly List<EllipsoidItem> ellipsoids = [];
     List<(float From, float To)> spans = [], spansScratch = [];
 
     /// <summary>Whether labels are added to the list.</summary>
@@ -77,10 +78,13 @@ public sealed class FramePreparer
         float bias = 1e-4f * camera.ViewRadius;
         IReadOnlyList<SceneItem> items = scene.Items;
         spheres.Clear();
+        ellipsoids.Clear();
         for (int i = 0; i < items.Count; i++)
         {
             if (items[i] is SphereItem sphere && sphere.Radius > 0)
                 spheres.Add(sphere);
+            else if (items[i] is EllipsoidItem ellipsoid && IsValid(ellipsoid))
+                ellipsoids.Add(ellipsoid);
         }
         for (int i = 0; i < items.Count; i++)
         {
@@ -91,6 +95,9 @@ public sealed class FramePreparer
                     break;
                 case SphereItem sphere:
                     AddSphere(list, p, sphere, i);
+                    break;
+                case EllipsoidItem ellipsoid when IsValid(ellipsoid):
+                    AddEllipsoid(list, p, ellipsoid, i);
                     break;
                 case RodItem rod:
                     AddRod(list, p, rod, i, bias);
@@ -219,6 +226,55 @@ public sealed class FramePreparer
         list.AddCommand(DrawKind.Circle, i, v.Z);
     }
 
+    static bool IsValid(EllipsoidItem ellipsoid)
+        => ellipsoid.Axes is { Length: 3 } axes && axes[0].LengthSquared() > 0 && axes[1].LengthSquared() > 0
+            && axes[2].LengthSquared() > 0;
+
+    /// <summary>Smallest outline the painter gets, in square pixels, so an ellipsoid seen edge on is still a thin line.</summary>
+    const float MinOutline = 0.25f;
+
+    /// <summary>
+    /// An ellipsoid becomes its outline ellipse, with the depth of its center like a sphere. In perspective the ellipse
+    /// is taken at the scale of the center, which is the same approximation the spheres use.
+    /// </summary>
+    static void AddEllipsoid(DrawList list, in Projector p, EllipsoidItem ellipsoid, int itemIndex)
+    {
+        Vector3 v = p.ToView(ellipsoid.Center);
+        if (!p.ProjectView(v, out float x, out float y, out float factor))
+            return;
+        float s = p.Scale * factor;
+        Vector3[] axes = ellipsoid.Axes;
+        // Axes in view space (directions only), then on the screen, where y points down.
+        Vector3 a0 = p.ToView(ellipsoid.Center + axes[0]) - v;
+        Vector3 a1 = p.ToView(ellipsoid.Center + axes[1]) - v;
+        Vector3 a2 = p.ToView(ellipsoid.Center + axes[2]) - v;
+        (float xx, float xy, float yy) = EllipseProjection.OutlineShape(a0, a1, a2);
+        (float l11, float l12, float l22) = EllipseProjection.SquareRoot(
+            xx * s * s + MinOutline, -xy * s * s, yy * s * s + MinOutline);
+
+        int i = list.EllipseCount;
+        list.EnsureEllipses(i + 1);
+        int o = DrawList.EllipseStride * i;
+        float[] data = list.EllipseData;
+        data[o] = x; data[o + 1] = y;
+        data[o + 2] = l11; data[o + 3] = l12; data[o + 4] = l12; data[o + 5] = l22;
+        WriteArc(data, o + 6, a0, a1, s);
+        WriteArc(data, o + 11, a0, a2, s);
+        WriteArc(data, o + 16, a1, a2, s);
+        list.EllipseColor[i] = ellipsoid.Color.ToArgb();
+        list.EllipseItem[i] = itemIndex;
+        list.EllipseArcs[i] = ellipsoid.PrincipalEllipses;
+        list.EllipseCount = i + 1;
+        list.AddCommand(DrawKind.Ellipse, i, v.Z);
+    }
+
+    static void WriteArc(float[] data, int o, Vector3 aj, Vector3 ak, float s)
+    {
+        data[o] = aj.X * s; data[o + 1] = -aj.Y * s;
+        data[o + 2] = ak.X * s; data[o + 3] = -ak.Y * s;
+        data[o + 4] = EllipseProjection.VisibleHalfStart(aj, ak);
+    }
+
     static void AddRod(DrawList list, in Projector p, RodItem rod, int itemIndex, float bias)
     {
         Vector3 axis = rod.End - rod.Start;
@@ -246,8 +302,9 @@ public sealed class FramePreparer
 
     /// <summary>
     /// A line is a long object: with one depth for all of it, a cell edge that runs from the back to the front would be
-    /// painted over an atom in front of its back end. So the parts inside a sphere are cut out (an atom at a cell corner
-    /// hides the end of the edge), and the rest is split into pieces no longer than the smallest sphere radius, each with
+    /// painted over an atom in front of its back end. So the parts inside a sphere or an ellipsoid are cut out (an atom at
+    /// a cell corner hides the end of the edge), and the rest is split into pieces no longer than the smallest sphere
+    /// radius or ellipsoid semi-axis, each with
     /// the depth of its own middle. Outside every sphere, a point that projects onto a sphere's disc is either wholly in
     /// front of it or wholly behind, so the per piece order is right up to the length of a piece.
     /// </summary>
@@ -280,8 +337,20 @@ public sealed class FramePreparer
             if (spans.Count == 0)
                 return;
         }
+        foreach (EllipsoidItem ellipsoid in ellipsoids)
+        {
+            Vector3[] axes = ellipsoid.Axes;
+            smallest = MathF.Min(smallest, MathF.Sqrt(MathF.Min(axes[0].LengthSquared(),
+                MathF.Min(axes[1].LengthSquared(), axes[2].LengthSquared()))));
+            if (!EllipseProjection.LineCrossing(axes, ellipsoid.Center, start, d, out float t0, out float t1)
+                || t1 <= 0 || t0 >= 1)
+                continue;
+            CutOut(t0, t1);
+            if (spans.Count == 0)
+                return;
+        }
 
-        int whole = spheres.Count > 0 ? (int)MathF.Ceiling(length / smallest) : LinePieces;
+        int whole = spheres.Count + ellipsoids.Count > 0 ? (int)MathF.Ceiling(length / smallest) : LinePieces;
         whole = Math.Clamp(whole, 1, MaxLinePieces);
         uint color = line.Color.ToArgb();
         foreach ((float from, float to) in spans)

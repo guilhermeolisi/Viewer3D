@@ -49,7 +49,22 @@ public sealed record CrystalAtom(string Label, string Element, double X, double 
 
     /// <summary>Index of the atom in the owner's own data, for reporting a selection back. -1 when unused.</summary>
     public int SourceIndex { get; init; } = -1;
+
+    /// <summary>
+    /// Displacement tensors of the atom at this position, for <see cref="CrystalStyle.ThermalEllipsoids"/>: one entry
+    /// draws one shape, so a site shared by elements with different tensors gives one entry per element. Null draws the
+    /// atom as having no data.
+    /// </summary>
+    public IReadOnlyList<AtomDisplacement>? Displacements { get; init; }
 }
+
+/// <summary>
+/// One displacement tensor of an atom, in the Cartesian frame of <see cref="CrystalCell"/> (a along x, b in the xy
+/// plane), in square angstrom.
+/// </summary>
+/// <param name="Element">Element the tensor belongs to, which picks the color; null takes the color of the atom.</param>
+/// <param name="Cartesian6">U11, U22, U33, U12, U13 and U23; null when there is no data for this atom.</param>
+public sealed record AtomDisplacement(string? Element, double[]? Cartesian6);
 
 /// <summary>
 /// A bond from atom <see cref="First"/> to atom <see cref="Second"/> translated by <see cref="Shift"/>, both indices

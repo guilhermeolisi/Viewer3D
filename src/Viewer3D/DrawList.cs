@@ -11,6 +11,12 @@ public enum DrawKind : byte
 
     /// <summary>A thick segment (a rod half or a line).</summary>
     Segment = 2,
+
+    /// <summary>
+    /// A shaded ellipse (an ellipsoid seen from the camera), with the visible halves of its principal ellipses. This is
+    /// the last value that fits the two bits a command keeps for its kind: a new kind needs a wider field.
+    /// </summary>
+    Ellipse = 3,
 }
 
 /// <summary>
@@ -31,6 +37,14 @@ public sealed class DrawList
     internal float[] CircleData = []; // x, y, r
     internal uint[] CircleColor = [];
     internal int[] CircleItem = [];
+
+    /// <summary>Floats per ellipse in <see cref="Ellipses"/>.</summary>
+    public const int EllipseStride = 21;
+
+    internal float[] EllipseData = []; // cx, cy, L11, L12, L21, L22, then 3 x (ux, uy, vx, vy, t0)
+    internal uint[] EllipseColor = [];
+    internal int[] EllipseItem = [];
+    internal bool[] EllipseArcs = [];
 
     internal float[] SegData = []; // x1, y1, x2, y2, width
     internal uint[] SegColor = [];
@@ -63,6 +77,9 @@ public sealed class DrawList
     /// <summary>Number of segments.</summary>
     public int SegmentCount { get; internal set; }
 
+    /// <summary>Number of ellipses.</summary>
+    public int EllipseCount { get; internal set; }
+
     /// <summary>Number of labels.</summary>
     public int LabelCount { get; internal set; }
 
@@ -92,6 +109,23 @@ public sealed class DrawList
 
     /// <summary>Base color (0xAARRGGBB) per circle; the painter adds the shading.</summary>
     public ReadOnlySpan<uint> CircleColors => CircleColor.AsSpan(0, CircleCount);
+
+    /// <summary>Index in <see cref="Viewer3D.Scene.Items"/> of the item each ellipse came from.</summary>
+    public ReadOnlySpan<int> EllipseItems => EllipseItem.AsSpan(0, EllipseCount);
+
+    /// <summary>
+    /// 21 floats per ellipse. First the center (cx, cy) and the symmetric 2x2 matrix L (L11, L12, L21, L22) that maps
+    /// the unit disc onto the outline: a point is cx + L11 u + L12 v, cy + L21 u + L22 v for u² + v² ≤ 1. Then, for each
+    /// of the three principal ellipses, ux, uy, vx, vy and t0: the points (cx + ux cos t + vx sin t, cy + uy cos t +
+    /// vy sin t) for t from t0 to t0 + π are its visible half.
+    /// </summary>
+    public ReadOnlySpan<float> Ellipses => EllipseData.AsSpan(0, EllipseStride * EllipseCount);
+
+    /// <summary>Base color (0xAARRGGBB) per ellipse; the painter adds the shading.</summary>
+    public ReadOnlySpan<uint> EllipseColors => EllipseColor.AsSpan(0, EllipseCount);
+
+    /// <summary>Whether the principal ellipses of each ellipse are drawn.</summary>
+    public ReadOnlySpan<bool> EllipseHasArcs => EllipseArcs.AsSpan(0, EllipseCount);
 
     /// <summary>Five floats per segment: x1, y1, x2, y2, width.</summary>
     public ReadOnlySpan<float> Segments => SegData.AsSpan(0, 5 * SegmentCount);
@@ -124,7 +158,18 @@ public sealed class DrawList
         Scene = scene;
         Width = width;
         Height = height;
-        TriangleCount = CircleCount = SegmentCount = LabelCount = CommandCount = 0;
+        TriangleCount = CircleCount = SegmentCount = EllipseCount = LabelCount = CommandCount = 0;
+    }
+
+    internal void EnsureEllipses(int count)
+    {
+        if (EllipseItem.Length >= count)
+            return;
+        int n = Grow(EllipseItem.Length, count);
+        Array.Resize(ref EllipseData, EllipseStride * n);
+        Array.Resize(ref EllipseColor, n);
+        Array.Resize(ref EllipseItem, n);
+        Array.Resize(ref EllipseArcs, n);
     }
 
     internal void EnsureTriangles(int count)

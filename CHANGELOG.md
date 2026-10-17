@@ -8,6 +8,14 @@
   for Z 1 to 118. `CrystalBondExpansion` extends bonds given around one atom per site to the equivalent atoms.
 - `Viewer3D`: `SphereItem.Sectors` paints a sphere in wedges, one color each, leaving the rest of the turn empty.
 - `Viewer3D.Avalonia`: `Viewer3DControl.ItemClicked` reports what was clicked on a left click that did not drag.
+- `Viewer3D`: `EllipsoidItem`, a shaded ellipsoid given by its three semi-axes, painted as its outline ellipse with the
+  visible halves of its principal ellipses (`DrawKind.Ellipse`, the last kind the command field has room for), cut
+  out of the lines that cross it and picked inside its outline. `EllipseProjection` holds the geometry.
+  `SphereItem.Dashed` draws only a dashed outline. `MeshShapes.Cube` builds a small cube.
+- `Viewer3D.Crystal`: the `ThermalEllipsoids` style draws each atom from its displacement tensors
+  (`CrystalAtom.Displacements`) at a probability level of 30, 50, 70 or 90% (`ProbabilityScale`), with thin rods cut
+  at the surfaces; a tensor that is not positive definite is a small cube and an atom without data a dashed sphere.
+- `Viewer3D.Sample`: `--bench-ellipsoids N` times a frame of N ellipsoids.
 
 ## 0.1.0 - 10/17/2026
 

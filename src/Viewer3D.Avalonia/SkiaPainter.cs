@@ -59,8 +59,15 @@ internal static class SkiaPainter
             if (kind == DrawKind.Circle)
             {
                 bool selected = IsSelected(scene, list.CircleItems[i], options.SelectedItemId);
-                var sectors = (scene?.Items[list.CircleItems[i]] as SphereItem)?.Sectors;
-                PaintCircle(canvas, list, i, sectors, fill, stroke, selected ? options.Label : (SKColor?)null);
+                var sphere = scene?.Items[list.CircleItems[i]] as SphereItem;
+                PaintCircle(canvas, list, i, sphere?.Sectors, sphere?.Dashed == true, fill, stroke,
+                    selected ? options.Label : (SKColor?)null);
+            }
+            else if (kind == DrawKind.Ellipse)
+            {
+                bool selected = IsSelected(scene, list.EllipseItems[i], options.SelectedItemId);
+                var sectors = (scene?.Items[list.EllipseItems[i]] as EllipsoidItem)?.Sectors;
+                PaintEllipse(canvas, list, i, sectors, fill, stroke, selected ? options.Label : (SKColor?)null);
             }
             else
             {
@@ -101,24 +108,27 @@ internal static class SkiaPainter
         canvas.DrawVertices(vertices, SKBlendMode.Dst, paint);
     }
 
-    static void PaintCircle(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, SKPaint fill,
-        SKPaint stroke, SKColor? outline)
+    static void PaintCircle(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, bool dashed,
+        SKPaint fill, SKPaint stroke, SKColor? outline)
     {
         ReadOnlySpan<float> data = list.Circles;
         float x = data[3 * i], y = data[3 * i + 1], r = data[3 * i + 2];
         if (r <= 0)
             return;
         Rgba baseColor = Rgba.FromArgb(list.CircleColors[i]);
-        if (sectors is { Count: > 0 })
+        if (dashed)
         {
-            PaintSectors(canvas, x, y, r, baseColor, sectors, fill, stroke);
+            using var dash = SKPathEffect.CreateDash([4f, 3f], 0f);
+            stroke.PathEffect = dash;
+            stroke.Color = new SKColor(baseColor.Shade(0.6f).ToArgb());
+            stroke.StrokeWidth = 1.5f;
+            stroke.StrokeCap = SKStrokeCap.Butt;
+            canvas.DrawCircle(x, y, r, stroke);
+            stroke.PathEffect = null;
         }
         else
         {
-            using var shader = SphereShader(x, y, r, baseColor);
-            fill.Shader = shader;
-            canvas.DrawCircle(x, y, r, fill);
-            fill.Shader = null;
+            PaintDisc(canvas, x, y, r, baseColor, sectors, fill, stroke, 1f);
         }
         if (outline is SKColor o)
         {
@@ -126,6 +136,75 @@ internal static class SkiaPainter
             stroke.StrokeWidth = 2f;
             stroke.StrokeCap = SKStrokeCap.Butt;
             canvas.DrawCircle(x, y, r + 1.5f, stroke);
+        }
+    }
+
+    /// <summary>
+    /// The shaded disc of a sphere, whole or in sectors. <paramref name="strokeScale"/> is how many canvas units make a
+    /// pixel, so the outline of an unfilled sector keeps its width when the canvas is transformed (an ellipse is the unit
+    /// disc under its matrix).
+    /// </summary>
+    static void PaintDisc(SKCanvas canvas, float x, float y, float r, Rgba baseColor, IReadOnlyList<SphereSector>? sectors,
+        SKPaint fill, SKPaint stroke, float strokeScale)
+    {
+        if (sectors is { Count: > 0 })
+        {
+            PaintSectors(canvas, x, y, r, baseColor, sectors, fill, stroke, strokeScale);
+            return;
+        }
+        using var shader = SphereShader(x, y, r, baseColor);
+        fill.Shader = shader;
+        canvas.DrawCircle(x, y, r, fill);
+        fill.Shader = null;
+    }
+
+    /// <summary>
+    /// An ellipse: the unit disc with the sphere shading under the matrix of the ellipse, a thin outline, and the visible
+    /// halves of the three principal ellipses, all lines with a width in pixels.
+    /// </summary>
+    static void PaintEllipse(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, SKPaint fill,
+        SKPaint stroke, SKColor? outline)
+    {
+        ReadOnlySpan<float> d = list.Ellipses.Slice(DrawList.EllipseStride * i, DrawList.EllipseStride);
+        float cx = d[0], cy = d[1];
+        var matrix = new SKMatrix(d[2], d[3], cx, d[4], d[5], cy, 0, 0, 1);
+        float det = MathF.Abs(d[2] * d[5] - d[3] * d[4]);
+        if (det <= 0)
+            return;
+        Rgba baseColor = Rgba.FromArgb(list.EllipseColors[i]);
+
+        canvas.Save();
+        canvas.Concat(in matrix);
+        PaintDisc(canvas, 0, 0, 1, baseColor, sectors, fill, stroke, 1f / MathF.Sqrt(det));
+        canvas.Restore();
+
+        using var shape = new SKPath();
+        shape.AddCircle(0, 0, 1);
+        shape.Transform(matrix);
+        stroke.StrokeCap = SKStrokeCap.Butt;
+        stroke.Color = new SKColor(baseColor.Shade(0.45f).ToArgb());
+        stroke.StrokeWidth = 1f;
+        canvas.DrawPath(shape, stroke);
+
+        if (list.EllipseHasArcs[i])
+        {
+            var unit = new SKRect(-1, -1, 1, 1);
+            stroke.StrokeWidth = 1.2f;
+            for (int k = 0; k < 3; k++)
+            {
+                int o = 6 + 5 * k;
+                using var arc = new SKPath();
+                arc.AddArc(unit, d[o + 4] * 180f / MathF.PI, 180f);
+                arc.Transform(new SKMatrix(d[o], d[o + 2], cx, d[o + 1], d[o + 3], cy, 0, 0, 1));
+                canvas.DrawPath(arc, stroke);
+            }
+        }
+
+        if (outline is SKColor highlight)
+        {
+            stroke.Color = highlight;
+            stroke.StrokeWidth = 2f;
+            canvas.DrawPath(shape, stroke);
         }
     }
 
@@ -145,7 +224,7 @@ internal static class SkiaPainter
     /// fractions leave of the turn stays empty, with the outline of the whole disc so the atom is still seen.
     /// </summary>
     static void PaintSectors(SKCanvas canvas, float x, float y, float r, Rgba baseColor,
-        IReadOnlyList<SphereSector> sectors, SKPaint fill, SKPaint stroke)
+        IReadOnlyList<SphereSector> sectors, SKPaint fill, SKPaint stroke, float strokeScale)
     {
         var oval = new SKRect(x - r, y - r, x + r, y + r);
         float start = -90f, total = 0f;
@@ -176,7 +255,7 @@ internal static class SkiaPainter
         if (total < 1f - 1e-6f)
         {
             stroke.Color = new SKColor(baseColor.Shade(0.45f).ToArgb());
-            stroke.StrokeWidth = 1.5f;
+            stroke.StrokeWidth = 1.5f * strokeScale;
             stroke.StrokeCap = SKStrokeCap.Butt;
             canvas.DrawCircle(x, y, r, stroke);
         }

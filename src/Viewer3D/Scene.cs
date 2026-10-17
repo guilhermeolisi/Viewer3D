@@ -46,6 +46,9 @@ public sealed class Scene
                 case SphereItem sphere:
                     Add(sphere.Center, sphere.Radius);
                     break;
+                case EllipsoidItem ellipsoid:
+                    Add(ellipsoid.Center, ellipsoid.BoundingRadius);
+                    break;
                 case RodItem rod:
                     Add(rod.Start, rod.Radius);
                     Add(rod.End, rod.Radius);
@@ -73,6 +76,9 @@ public sealed class Scene
                     break;
                 case SphereItem sphere:
                     radius = MathF.Max(radius, Vector3.Distance(sphere.Center, center) + sphere.Radius);
+                    break;
+                case EllipsoidItem ellipsoid:
+                    radius = MathF.Max(radius, Vector3.Distance(ellipsoid.Center, center) + ellipsoid.BoundingRadius);
                     break;
                 case RodItem rod:
                     radius = MathF.Max(radius, Vector3.Distance(rod.Start, center) + rod.Radius);

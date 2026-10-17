@@ -332,6 +332,51 @@ public class FramePreparerTests
     }
 
     [Fact]
+    public void Prepare_Ellipsoid_IsAnEllipseWithTheDepthOfItsCenter()
+    {
+        // ViewRadius 2 em 200 px: 50 px por unidade, centro em (100, 100).
+        var ellipsoid = new EllipsoidItem
+        {
+            Id = 4,
+            Center = new Vector3(0, 0, -0.5f),
+            Axes = [new(1, 0, 0), new(0, 0.5f, 0), new(0, 0, 0.25f)],
+            Color = Rgba.White,
+        };
+
+        DrawList list = Prepare(Triangle(0, Rgba.White), ellipsoid);
+
+        Assert.Equal(1, list.EllipseCount);
+        uint first = list.Commands[0];
+        Assert.Equal(DrawKind.Ellipse, DrawList.KindOf(first));
+        ReadOnlySpan<float> e = list.Ellipses;
+        Assert.Equal(100f, e[0], 3);
+        Assert.Equal(100f, e[1], 3);
+        // L = raiz de diag(50^2, 25^2) mais o piso de 0,25 px^2: 0,01 px cobre o piso.
+        Assert.Equal(50f, e[2], 1);
+        Assert.Equal(0f, e[3], 3);
+        Assert.Equal(25f, e[5], 1);
+        Assert.True(list.EllipseHasArcs[0]);
+    }
+
+    [Fact]
+    public void Prepare_LineThroughAnEllipsoid_IsCutWhereItIsInside()
+    {
+        var ellipsoid = new EllipsoidItem { Center = Vector3.Zero, Axes = [new(1, 0, 0), new(0, 0.5f, 0), new(0, 0, 0.25f)] };
+        var line = new LineItem { Start = new Vector3(-1.8f, 0, 0), End = new Vector3(1.8f, 0, 0) };
+
+        DrawList list = Prepare(ellipsoid, line);
+
+        Assert.True(list.SegmentCount > 0);
+        ReadOnlySpan<float> s = list.Segments;
+        for (int i = 0; i < list.SegmentCount; i++)
+        {
+            // Fora do elipsoide: |x - 100| >= 50 px, menos o meio pixel de sobreposicao das juntas.
+            Assert.True(MathF.Abs(s[5 * i] - 100) >= 49.4f && MathF.Abs(s[5 * i + 2] - 100) >= 49.4f,
+                $"segment {i} from {s[5 * i]} to {s[5 * i + 2]} enters the ellipsoid");
+        }
+    }
+
+    [Fact]
     public void Prepare_ReusesTheListBetweenFrames()
     {
         var preparer = new FramePreparer();

@@ -1,6 +1,6 @@
 namespace Viewer3D.Crystal;
 
-/// <summary>How the atoms of a crystal structure are drawn. Later styles (polyhedra, displacement ellipsoids) add values.</summary>
+/// <summary>How the atoms of a crystal structure are drawn. Later styles (polyhedra) add values at the end.</summary>
 public enum CrystalStyle
 {
     /// <summary>Small spheres, <see cref="CrystalSceneOptions.BallScale"/> times the atom radius, joined by rods.</summary>
@@ -11,6 +11,13 @@ public enum CrystalStyle
     /// no bonded pair overlaps.
     /// </summary>
     SpaceFilling,
+
+    /// <summary>
+    /// Each atom as the ellipsoid of its displacement tensor (<see cref="CrystalAtom.Displacements"/>) at
+    /// <see cref="CrystalSceneOptions.ProbabilityLevel"/>, joined by thin rods: a sphere when the tensor is isotropic, a
+    /// small cube when it is not positive definite, and a small dashed sphere when there is no data.
+    /// </summary>
+    ThermalEllipsoids,
 }
 
 /// <summary>Options of <see cref="CrystalSceneBuilder.Build"/>.</summary>
@@ -49,8 +56,25 @@ public sealed record CrystalSceneOptions
     /// <summary>Sphere radius as a fraction of the atom radius, in <see cref="CrystalStyle.BallAndStick"/>.</summary>
     public double BallScale { get; init; } = 0.4;
 
-    /// <summary>Rod radius, in angstrom.</summary>
+    /// <summary>Rod radius, in angstrom. <see cref="CrystalStyle.ThermalEllipsoids"/> uses 0.4 of it.</summary>
     public double BondRadius { get; init; } = 0.12;
+
+    /// <summary>
+    /// Probability of the ellipsoids, in percent, in <see cref="CrystalStyle.ThermalEllipsoids"/>: 30, 50, 70 or 90
+    /// (<see cref="ProbabilityScale"/>). Any other value takes 50.
+    /// </summary>
+    public int ProbabilityLevel { get; init; } = 50;
+
+    /// <summary>
+    /// Radius of the dashed sphere of an atom with no data, and half edge of the cube of a tensor that is not positive
+    /// definite, in angstrom.
+    /// </summary>
+    public double MarkerSize { get; init; } = 0.3;
+
+    /// <summary>
+    /// Draws the visible halves of the principal ellipses on each ellipsoid. A scene for gestures can turn them off.
+    /// </summary>
+    public bool PrincipalEllipses { get; init; } = true;
 
     /// <summary>Colors by element symbol, over those of <see cref="ElementTable"/>.</summary>
     public IReadOnlyDictionary<string, Rgba>? ElementColors { get; init; }
@@ -67,7 +91,7 @@ public sealed record ElementLegendEntry(string Element, Rgba Color);
 /// <summary>What a pickable item of a <see cref="CrystalScene"/> stands for.</summary>
 public enum CrystalItemKind
 {
-    /// <summary>A sphere.</summary>
+    /// <summary>A sphere, or a shape of <see cref="CrystalStyle.ThermalEllipsoids"/>.</summary>
     Atom,
 
     /// <summary>A rod.</summary>
@@ -116,7 +140,7 @@ public sealed class CrystalScene
 
     /// <summary>
     /// Sphere radius over atom radius: <see cref="CrystalSceneOptions.BallScale"/> in ball and stick, the touching scale
-    /// in space filling.
+    /// in space filling. In thermal ellipsoids, the factor of the probability level (<see cref="ProbabilityScale"/>).
     /// </summary>
     public double SphereScale { get; }
 

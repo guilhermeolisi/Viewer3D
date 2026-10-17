@@ -1,6 +1,7 @@
 // Viewer3D sample: a spherical surface, a height field, a ball-and-stick scene and a crystal structure.
 // Usage: Viewer3D.Sample             opens the window
 //        Viewer3D.Sample --export DIR writes the README images to DIR
+//        Viewer3D.Sample --bench-ellipsoids N times a frame of N ellipsoids (run in Release)
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -19,6 +20,13 @@ internal static class Program
     public static int Main(string[] args)
     {
         AppBuilder builder = AppBuilder.Configure<SampleApp>().UsePlatformDetect();
+        int bench = Array.IndexOf(args, "--bench-ellipsoids");
+        if (bench >= 0)
+        {
+            builder.SetupWithoutStarting();
+            EllipsoidBench.Run(bench + 1 < args.Length && int.TryParse(args[bench + 1], out int n) ? n : 2000);
+            return 0;
+        }
         int export = Array.IndexOf(args, "--export");
         if (export >= 0)
         {

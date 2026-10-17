@@ -83,6 +83,10 @@ public static class Picker
                     if (HitSegment(list.SegData, 5 * i, x, y))
                         return new PickResult(list.Scene.Items[list.SegItem[i]], -1, default);
                     break;
+                case DrawKind.Ellipse:
+                    if (HitEllipse(list.EllipseData, DrawList.EllipseStride * i, x, y))
+                        return new PickResult(list.Scene.Items[list.EllipseItem[i]], -1, default);
+                    break;
             }
         }
         return null;
@@ -103,6 +107,21 @@ public static class Picker
             return false;
         weights = new Vector3(wa, wb, wc);
         return true;
+    }
+
+    /// <summary>
+    /// Inside the outline ellipse c + L u, |u| ≤ 1: the point is inside when u = L⁻¹ (p − c) has |u| ≤ 1, which is
+    /// (p − c)ᵀ (L Lᵀ)⁻¹ (p − c) ≤ 1.
+    /// </summary>
+    static bool HitEllipse(float[] data, int o, float x, float y)
+    {
+        float dx = x - data[o], dy = y - data[o + 1];
+        float l11 = data[o + 2], l12 = data[o + 3], l21 = data[o + 4], l22 = data[o + 5];
+        float det = l11 * l22 - l12 * l21;
+        if (det == 0)
+            return false;
+        float u = (l22 * dx - l12 * dy) / det, v = (-l21 * dx + l11 * dy) / det;
+        return u * u + v * v <= 1;
     }
 
     static bool HitSegment(float[] seg, int o, float x, float y)

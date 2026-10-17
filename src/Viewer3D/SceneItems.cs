@@ -82,6 +82,41 @@ public sealed class SphereItem : SceneItem
     /// occupied.
     /// </summary>
     public IReadOnlyList<SphereSector>? Sectors { get; init; }
+
+    /// <summary>
+    /// When true, only a dashed outline of the disc is drawn, with no fill and no sectors: a marker for a point that
+    /// has nothing to show, such as an atom with no displacement data.
+    /// </summary>
+    public bool Dashed { get; init; }
+}
+
+/// <summary>
+/// A shaded ellipsoid, given by its center and its three semi-axes. Seen from the camera it is painted as its outline
+/// ellipse, shaded like a sphere, and, when <see cref="PrincipalEllipses"/> is true, with the visible half of the three
+/// ellipses cut by its principal planes (the usual look of a thermal ellipsoid).
+/// </summary>
+public sealed class EllipsoidItem : SceneItem
+{
+    /// <summary>Center.</summary>
+    public Vector3 Center { get; init; }
+
+    /// <summary>
+    /// The three semi-axes, in scene units: each vector points along a principal axis and its length is the semi-axis
+    /// length. They must be mutually perpendicular and not zero.
+    /// </summary>
+    public required Vector3[] Axes { get; init; }
+
+    /// <summary>Base color.</summary>
+    public Rgba Color { get; init; } = Rgba.Gray;
+
+    /// <summary>Optional sectors, painted over the outline ellipse as on a <see cref="SphereItem"/>.</summary>
+    public IReadOnlyList<SphereSector>? Sectors { get; init; }
+
+    /// <summary>Whether the visible halves of the three principal ellipses are drawn.</summary>
+    public bool PrincipalEllipses { get; init; } = true;
+
+    /// <summary>The longest semi-axis: the radius of a sphere around <see cref="Center"/> that holds the ellipsoid.</summary>
+    public float BoundingRadius => MathF.Max(Axes[0].Length(), MathF.Max(Axes[1].Length(), Axes[2].Length()));
 }
 
 /// <summary>One wedge of a <see cref="SphereItem"/> painted in sectors.</summary>

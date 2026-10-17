@@ -56,6 +56,18 @@ public class PickerTests
     }
 
     [Fact]
+    public void Pick_Ellipsoid_HitsInsideTheOutlineAndMissesOutside()
+    {
+        // Semi-eixo 1 ao longo de x (50 px) e 0,25 ao longo de y (12,5 px): um disco do maior semi-eixo acertaria os dois.
+        var ellipsoid = new EllipsoidItem { Id = 9, Axes = [new(1, 0, 0), new(0, 0.25f, 0), new(0, 0, 0.25f)] };
+        DrawList list = new FramePreparer().Prepare(new Scene([ellipsoid]), Camera, 200, 200);
+
+        Assert.Equal(9, Picker.Pick(list, 145, 100)?.ItemId);
+        Assert.Null(Picker.Pick(list, 100, 120));
+        Assert.Null(Picker.Pick(list, 140, 108));
+    }
+
+    [Fact]
     public void Pick_Segment_HitsWithinItsWidth()
     {
         var line = new LineItem { Id = 3, Start = new Vector3(-1, 0, 0), End = new Vector3(1, 0, 0), Width = 2 };

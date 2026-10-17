@@ -25,6 +25,12 @@ namespace Viewer3D.Crystal;
 /// their neighbors in the 26 cells around), so it never depends on the repetition.
 /// </para>
 /// <para>
+/// In thermal ellipsoids each atom is drawn from its displacement tensors, the same for every image, as each image is
+/// a translation of the atom: one shape per tensor, with semi-axes f·sqrt(λᵢ) along the eigenvectors, f from
+/// <see cref="ProbabilityScale"/>. The rods are 0.4 of <see cref="CrystalSceneOptions.BondRadius"/> and are cut where
+/// they leave the shapes at their ends.
+/// </para>
+/// <para>
 /// Spheres are shaded by the viewer with a light from the upper left. A mesh added to the same scene (coordination
 /// polyhedra) should use <see cref="MeshLighting.KeyLight"/>, whose light comes from the same side.
 /// </para>
@@ -73,6 +79,8 @@ public sealed class CrystalSceneBuilder
         readonly double[] radius;
         readonly Rgba[] color;
         readonly IReadOnlyList<SphereSector>?[] sectors;
+        readonly DisplacementShape[]?[] shapes;
+        readonly bool thermal;
         readonly double scale;
 
         public Context(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis)
@@ -94,7 +102,48 @@ public sealed class CrystalSceneBuilder
                 color[i] = ColorOf(main);
                 sectors[i] = SectorsOf(atom);
             }
-            scale = options.Style == CrystalStyle.SpaceFilling ? TouchingScale() : options.BallScale;
+            thermal = options.Style == CrystalStyle.ThermalEllipsoids;
+            shapes = new DisplacementShape[]?[atoms.Count];
+            if (thermal)
+            {
+                int level = ProbabilityScale.Levels.Contains(options.ProbabilityLevel) ? options.ProbabilityLevel : 50;
+                scale = ProbabilityScale.For(level);
+                for (int i = 0; i < atoms.Count; i++)
+                    shapes[i] = ShapesOf(atoms[i], i);
+            }
+            else
+            {
+                scale = options.Style == CrystalStyle.SpaceFilling ? TouchingScale() : options.BallScale;
+            }
+        }
+
+        /// <summary>
+        /// One shape per displacement of the atom, each in the color of its element; no displacement at all gives one
+        /// marker of no data.
+        /// </summary>
+        DisplacementShape[] ShapesOf(CrystalAtom atom, int index)
+        {
+            if (atom.Displacements is not { Count: > 0 } list)
+                return [DisplacementShape.From(null, scale, options.MarkerSize, color[index], null)];
+            var result = new DisplacementShape[list.Count];
+            for (int k = 0; k < list.Count; k++)
+            {
+                AtomDisplacement d = list[k];
+                Rgba c = list.Count > 1 && d.Element is string element ? ColorOf(element) : color[index];
+                result[k] = DisplacementShape.From(d.Cartesian6, scale, options.MarkerSize, c, d.Element);
+            }
+            return result;
+        }
+
+        /// <summary>Where a bond from the atom along <paramref name="direction"/> leaves its shapes.</summary>
+        float Reach(int atom, Vector3 direction)
+        {
+            if (!thermal)
+                return (float)(scale * radius[atom]);
+            float reach = 0;
+            foreach (DisplacementShape shape in shapes[atom]!)
+                reach = MathF.Max(reach, shape.Reach(direction));
+            return reach;
         }
 
         public CrystalScene Build(LatticeShift n, string? warning)
@@ -131,13 +180,48 @@ public sealed class CrystalSceneBuilder
             {
                 Vector3 p = Position(atom, t);
                 drawn[(atom, t)] = p;
-                int id = nextId++;
-                Rgba baseColor = faded ? Fade(color[atom]) : color[atom];
                 IReadOnlyList<SphereSector>? s = sectors[atom];
                 if (faded && s is not null)
                     s = [.. s.Select(x => x with { Color = Fade(x.Color) })];
+                if (thermal)
+                {
+                    AddShapes(atom, t, p, faded, s);
+                    return;
+                }
+                int id = nextId++;
+                Rgba baseColor = faded ? Fade(color[atom]) : color[atom];
                 items.Add(new SphereItem { Id = id, Center = p, Radius = (float)(scale * radius[atom]), Color = baseColor, Sectors = s });
                 lookup[id] = new CrystalItemInfo(CrystalItemKind.Atom, atom, -1, t - reduced[atom].Floor, faded);
+            }
+
+            // Estilo termico: um item por deslocamento do atomo, todos apontando para o mesmo atomo na selecao. Os
+            // setores de ocupacao so valem com um deslocamento so; com varios, cada um ja tem a cor do seu elemento.
+            void AddShapes(int atom, LatticeShift t, Vector3 p, bool faded, IReadOnlyList<SphereSector>? s)
+            {
+                DisplacementShape[] list = shapes[atom]!;
+                IReadOnlyList<SphereSector>? shapeSectors = list.Length == 1 ? s : null;
+                foreach (DisplacementShape shape in list)
+                {
+                    int id = nextId++;
+                    Rgba c = faded ? Fade(shape.Color) : shape.Color;
+                    SceneItem item = shape.Kind switch
+                    {
+                        DisplacementShapeKind.Ellipsoid => new EllipsoidItem
+                        {
+                            Id = id,
+                            Center = p,
+                            Axes = shape.Axes!,
+                            Color = c,
+                            Sectors = shapeSectors,
+                            PrincipalEllipses = options.PrincipalEllipses,
+                        },
+                        DisplacementShapeKind.Cube => MeshShapes.Cube(p, shape.Radius, c, id),
+                        DisplacementShapeKind.Missing => new SphereItem { Id = id, Center = p, Radius = shape.Radius, Color = c, Dashed = true },
+                        _ => new SphereItem { Id = id, Center = p, Radius = shape.Radius, Color = c, Sectors = shapeSectors },
+                    };
+                    items.Add(item);
+                    lookup[id] = new CrystalItemInfo(CrystalItemKind.Atom, atom, -1, t - reduced[atom].Floor, faded);
+                }
             }
 
             foreach ((int atom, LatticeShift t) in own)
@@ -177,22 +261,24 @@ public sealed class CrystalSceneBuilder
             foreach ((int atom, LatticeShift t) in completions)
                 AddSphere(atom, t, true);
 
-            if (options.Style == CrystalStyle.BallAndStick)
+            if (options.Style is CrystalStyle.BallAndStick or CrystalStyle.ThermalEllipsoids)
             {
+                float rodRadius = (float)(thermal ? 0.4 * options.BondRadius : options.BondRadius);
                 foreach ((int bond, int first, LatticeShift ft, int second, LatticeShift st) in rods)
                 {
                     bool faded = completions.Contains((first, ft)) || completions.Contains((second, st));
                     int id = nextId++;
+                    Vector3 start = drawn[(first, ft)], end = drawn[(second, st)];
                     items.Add(new RodItem
                     {
                         Id = id,
-                        Start = drawn[(first, ft)],
-                        End = drawn[(second, st)],
-                        Radius = (float)options.BondRadius,
+                        Start = start,
+                        End = end,
+                        Radius = rodRadius,
                         StartColor = completions.Contains((first, ft)) ? Fade(color[first]) : color[first],
                         EndColor = completions.Contains((second, st)) ? Fade(color[second]) : color[second],
-                        StartTrim = (float)(scale * radius[first]),
-                        EndTrim = (float)(scale * radius[second]),
+                        StartTrim = Reach(first, end - start),
+                        EndTrim = Reach(second, start - end),
                     });
                     lookup[id] = new CrystalItemInfo(CrystalItemKind.Bond, first, bond, ft - reduced[first].Floor, faded);
                 }
