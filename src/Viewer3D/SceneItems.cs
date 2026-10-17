@@ -13,6 +13,23 @@ public abstract class SceneItem
     public int Id { get; init; }
 }
 
+/// <summary>How <see cref="FramePreparer"/> lights the faces of a mesh.</summary>
+public enum MeshLighting
+{
+    /// <summary>
+    /// A light at the eye: a face turned to the viewer is fully lit, a tilted one darker. Even and flat, so a surface
+    /// seen head on shows little relief.
+    /// </summary>
+    Headlight,
+
+    /// <summary>
+    /// A light from the upper left, in front of the scene (<see cref="FramePreparer.KeyLightDirection"/>), with a small
+    /// white highlight. Slopes facing the light are bright and the others dark, which shows the relief of a surface
+    /// from any side. The light turns with the view, so it keeps coming from the upper left of the screen.
+    /// </summary>
+    KeyLight,
+}
+
 /// <summary>A triangle mesh. Triangles are counter-clockwise when seen from their front side.</summary>
 public sealed class MeshItem : SceneItem
 {
@@ -36,6 +53,9 @@ public sealed class MeshItem : SceneItem
 
     /// <summary>When true, back faces are drawn too (open surfaces such as height fields).</summary>
     public bool DoubleSided { get; init; }
+
+    /// <summary>How the faces are lit. The default, <see cref="MeshLighting.Headlight"/>, lights from the eye.</summary>
+    public MeshLighting Lighting { get; init; }
 
     /// <summary>Number of triangles.</summary>
     public int TriangleCount => Indices.Length / 3;

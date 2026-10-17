@@ -62,6 +62,83 @@ public class FramePreparerTests
         Assert.Equal((byte)(255 * expected + 0.5f), Rgba.FromArgb(away.TriangleColors[0]).R);
     }
 
+    /// <summary>A triangle counter-clockwise around <paramref name="normal"/> (the default camera keeps world = view).</summary>
+    static MeshItem Facing(Vector3 normal, Rgba color, bool reversed = false, bool doubleSided = false)
+    {
+        Vector3 n = Vector3.Normalize(normal);
+        Vector3 u = Vector3.Normalize(Vector3.Cross(n, MathF.Abs(n.X) < 0.9f ? Vector3.UnitX : Vector3.UnitY));
+        Vector3 v = Vector3.Cross(n, u);
+        return new MeshItem
+        {
+            Positions = [u, v, -u - v],
+            Indices = reversed ? [0, 2, 1] : [0, 1, 2],
+            Color = color,
+            DoubleSided = doubleSided,
+            Lighting = MeshLighting.KeyLight,
+        };
+    }
+
+    static byte Red(MeshItem mesh) => Rgba.FromArgb(Prepare(mesh).TriangleColors[0]).R;
+
+    [Fact]
+    public void MeshItem_IsLitByTheHeadlightByDefault()
+    {
+        Assert.Equal(MeshLighting.Headlight, Triangle(0, Rgba.White).Lighting);
+    }
+
+    [Fact]
+    public void Prepare_KeyLight_SlopeTowardsTheUpperLeftIsBrighterThanTheFrontAndTheFrontThanTheLowerRight()
+    {
+        byte upperLeft = Red(Facing(new(-0.4f, 0.4f, 1), Rgba.White));
+        byte front = Red(Facing(Vector3.UnitZ, Rgba.White));
+        byte lowerRight = Red(Facing(new(0.4f, -0.4f, 1), Rgba.White));
+
+        Assert.True(upperLeft > front, $"{upperLeft} > {front}");
+        Assert.True(front > lowerRight, $"{front} > {lowerRight}");
+    }
+
+    [Fact]
+    public void Prepare_KeyLight_FaceTurnedAwayFromTheLightGetsOnlyTheAmbient()
+    {
+        // Normal (0.6, -0.6, 0.2): dot with the light (-0.45, 0.55, 0.70) is negative.
+        byte red = Red(Facing(new(0.6f, -0.6f, 0.2f), Rgba.White));
+
+        Assert.Equal((byte)(255 * FramePreparer.Ambient + 0.5f), red);
+    }
+
+    [Fact]
+    public void Prepare_KeyLight_FaceHalfwayBetweenLightAndEyeShowsTheHighlight()
+    {
+        // A black face has no diffuse color to show: what it shows is the highlight, Highlight at its peak.
+        Vector3 halfway = Vector3.Normalize(FramePreparer.KeyLightDirection + Vector3.UnitZ);
+
+        byte red = Red(Facing(halfway, Rgba.Black));
+
+        int peak = (int)(255 * FramePreparer.Highlight + 0.5f);
+        Assert.InRange(red, peak - 2, peak);
+    }
+
+    [Fact]
+    public void Prepare_KeyLight_BackOfADoubleSidedSurfaceIsLitLikeItsFront()
+    {
+        Vector3 normal = new(-0.3f, 0.2f, 1);
+
+        uint front = Prepare(Facing(normal, new Rgba(200, 120, 40), doubleSided: true)).TriangleColors[0];
+        uint back = Prepare(Facing(normal, new Rgba(200, 120, 40), reversed: true, doubleSided: true)).TriangleColors[0];
+
+        Assert.Equal(front, back);
+    }
+
+    [Fact]
+    public void Prepare_KeyLight_KeepsTheAlpha()
+    {
+        Vector3 halfway = Vector3.Normalize(FramePreparer.KeyLightDirection + Vector3.UnitZ);
+
+        byte alpha = Rgba.FromArgb(Prepare(Facing(halfway, new Rgba(10, 20, 30, 128))).TriangleColors[0]).A;
+
+        Assert.Equal(128, alpha);
+    }
+
     [Fact]
     public void Prepare_UsesVertexColorsBeforeFaceColors()
     {

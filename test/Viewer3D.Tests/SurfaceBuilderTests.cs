@@ -157,6 +157,21 @@ public class SurfaceBuilderTests
     }
 
     [Fact]
+    public void Lighting_IsTheHeadlightUnlessAsked_AndRecolorKeepsIt()
+    {
+        MeshItem plain = SurfaceBuilder.Spherical(Unit(2), 2);
+        MeshItem lit = SurfaceBuilder.Spherical(Unit(2), 2, lighting: MeshLighting.KeyLight);
+        MeshItem field = SurfaceBuilder.HeightField([[0, 1], [2, 3]], 0, 1, 0, 1, lighting: MeshLighting.KeyLight);
+
+        MeshItem recolored = SurfaceBuilder.Recolor(lit, new FuncColorMap(_ => Rgba.Black));
+
+        Assert.Equal(MeshLighting.Headlight, plain.Lighting);
+        Assert.Equal(MeshLighting.KeyLight, lit.Lighting);
+        Assert.Equal(MeshLighting.KeyLight, field.Lighting);
+        Assert.Equal(MeshLighting.KeyLight, recolored.Lighting);
+    }
+
+    [Fact]
     public void Recolor_WithNewScalars_ColorsByThem()
     {
         MeshItem mesh = SurfaceBuilder.Spherical(Unit(2), 2);

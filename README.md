@@ -30,13 +30,14 @@ using Viewer3D.Avalonia;
 int n = 90;
 double[][] radii = /* your grid */;
 var map = new LevelColorMap(levels, colors);           // or new FuncColorMap(v => ...)
-MeshItem surface = SurfaceBuilder.Spherical(radii, n, map: map);
+// The key light, from the upper left, shows the relief; the default light, at the eye, is flatter.
+MeshItem surface = SurfaceBuilder.Spherical(radii, n, map: map, lighting: MeshLighting.KeyLight);
 
 var viewer = new Viewer3DControl
 {
     Scene = new Scene([surface]),
     // Optional: a lighter scene painted while the user drags or zooms.
-    LowDetailScene = new Scene([SurfaceBuilder.Spherical(SurfaceBuilder.Decimate(radii, n, 3), n / 3, map: map)]),
+    LowDetailScene = new Scene([SurfaceBuilder.Spherical(SurfaceBuilder.Decimate(radii, n, 3), n / 3, map: map, lighting: MeshLighting.KeyLight)]),
     AxisDirections = [new(Vector3.UnitX, "a"), new(Vector3.UnitY, "b"), new(Vector3.UnitZ, "c")],
 };
 viewer.Camera!.Frame(viewer.Scene);
@@ -46,7 +47,9 @@ byte[] png = viewer.RenderToPng(1600, 1200);
 
 Scenes are lists of items: `MeshItem` (triangles with a color per vertex or per face), `SphereItem`, `RodItem` (a
 stick drawn in two halves, each with the color of its end, cut where it enters the spheres), `LineItem` and
-`LabelItem`. Each item has an `Id`, which picking reports back.
+`LabelItem`. Each item has an `Id`, which picking reports back. A mesh is lit by a light at the eye
+(`MeshLighting.Headlight`, the default) or by a key light from the upper left of the screen with a small highlight
+(`MeshLighting.KeyLight`), which shows the relief of a surface seen head on.
 
 ## Interaction
 

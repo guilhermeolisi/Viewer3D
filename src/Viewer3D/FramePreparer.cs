@@ -4,14 +4,30 @@ namespace Viewer3D;
 
 /// <summary>
 /// Turns a <see cref="Scene"/> and a <see cref="Camera"/> into a <see cref="DrawList"/>: rotates and projects, drops
-/// the back faces of single-sided meshes, lights each face with a light attached to the viewer (plus a minimum of
-/// ambient light), and orders everything back to front. One instance keeps its scratch buffers between frames, so
-/// it is not thread-safe: use one per thread.
+/// the back faces of single-sided meshes, lights each face as its mesh asks (<see cref="MeshItem.Lighting"/>: a light
+/// attached to the viewer, or a key light from the upper left; both with a minimum of ambient light), and orders
+/// everything back to front. One instance keeps its scratch buffers between frames, so it is not thread-safe: use one
+/// per thread.
 /// </summary>
 public sealed class FramePreparer
 {
-    /// <summary>Light that reaches faces turned away from the viewer.</summary>
+    /// <summary>Light that reaches faces turned away from the light.</summary>
     public const float Ambient = 0.35f;
+
+    /// <summary>
+    /// Unit direction towards the key light (<see cref="MeshLighting.KeyLight"/>), in view space (x right, y up, z
+    /// towards the viewer): from the upper left and in front.
+    /// </summary>
+    public static readonly Vector3 KeyLightDirection = Vector3.Normalize(new Vector3(-0.45f, 0.55f, 0.70f));
+
+    /// <summary>Strength of the white highlight of the key light, at its peak.</summary>
+    public const float Highlight = 0.3f;
+
+    /// <summary>Exponent of the highlight: the larger, the smaller the spot.</summary>
+    const float Shininess = 24f;
+
+    /// <summary>Halfway between the key light and the eye (Blinn): a face along it shows the highlight.</summary>
+    static readonly Vector3 HalfVector = Vector3.Normalize(KeyLightDirection + Vector3.UnitZ);
 
     /// <summary>Pieces of a line when the scene has no sphere to size them by.</summary>
     const int LinePieces = 16;
@@ -98,6 +114,7 @@ public sealed class FramePreparer
         Rgba[]? vertexColors = mesh.VertexColors;
         Rgba[]? faceColors = mesh.FaceColors;
         Rgba fallback = mesh.Color;
+        bool keyLight = mesh.Lighting == MeshLighting.KeyLight;
         int tc = list.TriangleCount, cc = list.CommandCount;
         float[] xy = list.TriXY;
         uint[] colors = list.TriColor;
@@ -114,7 +131,13 @@ public sealed class FramePreparer
             float wx = vx[c] - vx[a], wy = vy[c] - vy[a], wz = vz[c] - vz[a];
             float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
             float len = MathF.Sqrt(nx * nx + ny * ny + nz * nz);
-            float light = len > 0 ? Ambient + (1 - Ambient) * MathF.Abs(nz) / len : 1f;
+            float light, shine = 0;
+            if (len <= 0)
+                light = 1f;
+            else if (keyLight)
+                (light, shine) = KeyLight(nx, ny, nz, len);
+            else
+                light = Ambient + (1 - Ambient) * MathF.Abs(nz) / len;
 
             int o = 6 * tc;
             xy[o] = sx[a]; xy[o + 1] = sy[a];
@@ -123,13 +146,13 @@ public sealed class FramePreparer
             int q = 3 * tc;
             if (vertexColors is not null)
             {
-                colors[q] = vertexColors[a].Shade(light).ToArgb();
-                colors[q + 1] = vertexColors[b].Shade(light).ToArgb();
-                colors[q + 2] = vertexColors[c].Shade(light).ToArgb();
+                colors[q] = Lit(vertexColors[a], light, shine);
+                colors[q + 1] = Lit(vertexColors[b], light, shine);
+                colors[q + 2] = Lit(vertexColors[c], light, shine);
             }
             else
             {
-                uint face = (faceColors is not null ? faceColors[t] : fallback).Shade(light).ToArgb();
+                uint face = Lit(faceColors is not null ? faceColors[t] : fallback, light, shine);
                 colors[q] = colors[q + 1] = colors[q + 2] = face;
             }
             list.TriItem[tc] = itemIndex;
@@ -141,6 +164,27 @@ public sealed class FramePreparer
         }
         list.TriangleCount = tc;
         list.CommandCount = cc;
+    }
+
+    /// <summary>
+    /// Key light of a face with view-space normal (nx, ny, nz) of length <paramref name="len"/>: diffuse light plus the
+    /// strength of the highlight. The normal is taken on the side that faces the viewer, so the back of a double-sided
+    /// surface is lit like its front.
+    /// </summary>
+    static (float Light, float Shine) KeyLight(float nx, float ny, float nz, float len)
+    {
+        float s = nz < 0 ? -1f / len : 1f / len;
+        var n = new Vector3(nx * s, ny * s, nz * s);
+        float diffuse = MathF.Max(0, Vector3.Dot(n, KeyLightDirection));
+        float shine = diffuse > 0 ? Highlight * MathF.Pow(MathF.Max(0, Vector3.Dot(n, HalfVector)), Shininess) : 0;
+        return (Ambient + (1 - Ambient) * diffuse, shine);
+    }
+
+    /// <summary>A color shaded by <paramref name="light"/>, then pulled towards white by <paramref name="shine"/>.</summary>
+    static uint Lit(Rgba color, float light, float shine)
+    {
+        Rgba shaded = color.Shade(light);
+        return (shine > 0 ? Rgba.Lerp(shaded, new Rgba(255, 255, 255, shaded.A), shine) : shaded).ToArgb();
     }
 
     static void AddSphere(DrawList list, in Projector p, SphereItem sphere, int itemIndex)

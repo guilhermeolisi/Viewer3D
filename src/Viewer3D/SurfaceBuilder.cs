@@ -23,7 +23,8 @@ public static class SurfaceBuilder
     /// <param name="scalars">Values to color by, on the same grid; null colors by the radius.</param>
     /// <param name="map">Color map; null leaves the mesh with its single color.</param>
     /// <param name="id">Identifier of the mesh.</param>
-    public static MeshItem Spherical(IReadOnlyList<IReadOnlyList<double>> radii, int n, IReadOnlyList<IReadOnlyList<double>>? scalars = null, IColorMap? map = null, int id = 0)
+    /// <param name="lighting">How the mesh is lit; <see cref="MeshLighting.KeyLight"/> shows the relief best.</param>
+    public static MeshItem Spherical(IReadOnlyList<IReadOnlyList<double>> radii, int n, IReadOnlyList<IReadOnlyList<double>>? scalars = null, IColorMap? map = null, int id = 0, MeshLighting lighting = MeshLighting.Headlight)
     {
         CheckSphericalGrid(radii, n, nameof(radii));
         if (scalars is not null)
@@ -77,15 +78,16 @@ public static class SurfaceBuilder
             Indices = indices,
             Scalars = values,
             VertexColors = map is null ? null : Colors(values, map),
+            Lighting = lighting,
         };
     }
 
     /// <summary>
     /// An open surface z(x, y). <paramref name="heights"/> has one row per y (from <paramref name="yMin"/> to
     /// <paramref name="yMax"/>) and one column per x (from <paramref name="xMin"/> to <paramref name="xMax"/>). The mesh
-    /// is double-sided.
+    /// is double-sided. <paramref name="lighting"/> is as in <see cref="Spherical"/>.
     /// </summary>
-    public static MeshItem HeightField(IReadOnlyList<IReadOnlyList<double>> heights, float xMin, float xMax, float yMin, float yMax, IReadOnlyList<IReadOnlyList<double>>? scalars = null, IColorMap? map = null, int id = 0)
+    public static MeshItem HeightField(IReadOnlyList<IReadOnlyList<double>> heights, float xMin, float xMax, float yMin, float yMax, IReadOnlyList<IReadOnlyList<double>>? scalars = null, IColorMap? map = null, int id = 0, MeshLighting lighting = MeshLighting.Headlight)
     {
         ArgumentNullException.ThrowIfNull(heights);
         int rows = heights.Count;
@@ -130,6 +132,7 @@ public static class SurfaceBuilder
             Scalars = values,
             VertexColors = map is null ? null : Colors(values, map),
             DoubleSided = true,
+            Lighting = lighting,
         };
     }
 
@@ -185,6 +188,7 @@ public static class SurfaceBuilder
             VertexColors = Colors(scalars, map),
             Color = mesh.Color,
             DoubleSided = mesh.DoubleSided,
+            Lighting = mesh.Lighting,
         };
     }
 

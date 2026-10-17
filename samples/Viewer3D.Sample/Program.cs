@@ -111,7 +111,7 @@ internal static class Scenes
             }
         }
         double[] levels = Enumerable.Range(0, Palette.Length).Select(k => 0.6 + 0.08 * k).ToArray();
-        return new Scene([SurfaceBuilder.Spherical(radii, n, map: new LevelColorMap(levels, Palette))]);
+        return new Scene([SurfaceBuilder.Spherical(radii, n, map: new LevelColorMap(levels, Palette), lighting: MeshLighting.KeyLight)]);
     }
 
     public static Scene HeightField()
@@ -129,7 +129,7 @@ internal static class Scenes
             }
         }
         var map = new FuncColorMap(v => Rgba.Lerp(Palette[0], Palette[^1], (float)((v + 1) / 2)));
-        return new Scene([SurfaceBuilder.HeightField(z, -4, 4, -4, 4, map: map)]);
+        return new Scene([SurfaceBuilder.HeightField(z, -4, 4, -4, 4, map: map, lighting: MeshLighting.KeyLight)]);
     }
 
     public static Scene Atoms()
