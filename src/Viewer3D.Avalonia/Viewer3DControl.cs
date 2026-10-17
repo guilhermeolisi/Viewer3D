@@ -24,6 +24,18 @@ public sealed class ItemHoveredEventArgs(PickResult? pick, Point position) : Eve
     public Point Position { get; } = position;
 }
 
+/// <summary>Arguments of <see cref="Viewer3DControl.ItemClicked"/>.</summary>
+/// <param name="pick">What was clicked, or null when the click fell on the background.</param>
+/// <param name="position">Pointer position in the control.</param>
+public sealed class ItemClickedEventArgs(PickResult? pick, Point position) : EventArgs
+{
+    /// <summary>What was clicked, or null when the click fell on the background.</summary>
+    public PickResult? Pick { get; } = pick;
+
+    /// <summary>Pointer position in the control.</summary>
+    public Point Position { get; } = position;
+}
+
 /// <summary>
 /// Shows a <see cref="Scene"/> painted by software through Skia. Drag to rotate, right button or Shift and drag to
 /// move, wheel to zoom at the pointer, double click to frame the scene, arrows to rotate and + or - to zoom.
@@ -69,6 +81,12 @@ public class Viewer3DControl : Control
     public static readonly StyledProperty<ProjectionKind> ProjectionProperty =
         AvaloniaProperty.Register<Viewer3DControl, ProjectionKind>(nameof(Projection));
 
+    /// <summary>
+    /// How far, in device-independent pixels, the pointer may move between press and release for the gesture to still
+    /// count as a click.
+    /// </summary>
+    public const double ClickTolerance = 4;
+
     static readonly SKColor[] LightAxes = [new(0xFFD0342C), new(0xFF2E9E3E), new(0xFF2F5FD0)];
     static readonly SKColor[] DarkAxes = [new(0xFFFF6B60), new(0xFF5FD06A), new(0xFF6F9BFF)];
 
@@ -78,8 +96,8 @@ public class Viewer3DControl : Control
     int nextList;
     DrawList? current;
     Camera? subscribed;
-    bool dragging, panning, wheeling;
-    Point last;
+    bool dragging, panning, wheeling, clicking;
+    Point last, pressed;
     PickResult? lastHover;
 
     static Viewer3DControl()
@@ -165,6 +183,13 @@ public class Viewer3DControl : Control
     /// <summary>Raised when the pointer moves over the control without a gesture.</summary>
     public event EventHandler<ItemHoveredEventArgs>? ItemHovered;
 
+    /// <summary>
+    /// Raised when the left button is pressed and released without moving the pointer more than
+    /// <see cref="ClickTolerance"/> (and without Shift, which moves the view). A double click frames the scene and is
+    /// not reported.
+    /// </summary>
+    public event EventHandler<ItemClickedEventArgs>? ItemClicked;
+
     /// <summary>Raised when a drag or a wheel gesture starts.</summary>
     public event EventHandler? GestureStarted;
 
@@ -242,7 +267,7 @@ public class Viewer3DControl : Control
         Subscribe(null);
         ActualThemeVariantChanged -= OnThemeChanged;
         wheelTimer.Stop();
-        dragging = panning = wheeling = false;
+        dragging = panning = wheeling = clicking = false;
     }
 
     void OnThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
@@ -316,7 +341,8 @@ public class Viewer3DControl : Control
         }
         PointerPoint point = e.GetCurrentPoint(this);
         panning = point.Properties.IsRightButtonPressed || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        last = point.Position;
+        clicking = point.Properties.IsLeftButtonPressed && !panning;
+        last = pressed = point.Position;
         e.Pointer.Capture(this);
         bool started = !IsGestureActive;
         dragging = true;
@@ -334,6 +360,8 @@ public class Viewer3DControl : Control
         {
             float dx = (float)(p.X - last.X), dy = (float)(p.Y - last.Y);
             last = p;
+            if (clicking && Point.Distance(p, pressed) > ClickTolerance)
+                clicking = false;
             if (panning)
                 camera.Pan(dx, dy, (float)Bounds.Width, (float)Bounds.Height);
             else
@@ -352,6 +380,13 @@ public class Viewer3DControl : Control
         base.OnPointerReleased(e);
         if (!dragging)
             return;
+        Point p = e.GetPosition(this);
+        if (clicking && e.InitialPressMouseButton == MouseButton.Left && Point.Distance(p, pressed) <= ClickTolerance)
+        {
+            PickResult? pick = current is null ? null : Picker.Pick(current, (float)p.X, (float)p.Y);
+            ItemClicked?.Invoke(this, new ItemClickedEventArgs(pick, p));
+        }
+        clicking = false;
         // Before releasing the capture, whose loss would end the gesture a second time.
         StopDrag();
         e.Pointer.Capture(null);

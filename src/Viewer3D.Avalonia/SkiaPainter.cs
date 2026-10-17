@@ -59,7 +59,8 @@ internal static class SkiaPainter
             if (kind == DrawKind.Circle)
             {
                 bool selected = IsSelected(scene, list.CircleItems[i], options.SelectedItemId);
-                PaintCircle(canvas, list, i, fill, stroke, selected ? options.Label : (SKColor?)null);
+                var sectors = (scene?.Items[list.CircleItems[i]] as SphereItem)?.Sectors;
+                PaintCircle(canvas, list, i, sectors, fill, stroke, selected ? options.Label : (SKColor?)null);
             }
             else
             {
@@ -100,29 +101,84 @@ internal static class SkiaPainter
         canvas.DrawVertices(vertices, SKBlendMode.Dst, paint);
     }
 
-    static void PaintCircle(SKCanvas canvas, DrawList list, int i, SKPaint fill, SKPaint stroke, SKColor? outline)
+    static void PaintCircle(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, SKPaint fill,
+        SKPaint stroke, SKColor? outline)
     {
         ReadOnlySpan<float> data = list.Circles;
         float x = data[3 * i], y = data[3 * i + 1], r = data[3 * i + 2];
         if (r <= 0)
             return;
         Rgba baseColor = Rgba.FromArgb(list.CircleColors[i]);
-        Rgba light = Rgba.Lerp(baseColor, Rgba.White, 0.55f) with { A = baseColor.A };
-        Rgba dark = baseColor.Shade(0.45f);
-        // A light from the upper left, as a sphere looks under the viewer's light.
-        using var shader = SKShader.CreateRadialGradient(
-            new SKPoint(x - 0.35f * r, y - 0.35f * r), 1.35f * r,
-            [new SKColor(light.ToArgb()), new SKColor(baseColor.ToArgb()), new SKColor(dark.ToArgb())],
-            [0f, 0.45f, 1f], SKShaderTileMode.Clamp);
-        fill.Shader = shader;
-        canvas.DrawCircle(x, y, r, fill);
-        fill.Shader = null;
+        if (sectors is { Count: > 0 })
+        {
+            PaintSectors(canvas, x, y, r, baseColor, sectors, fill, stroke);
+        }
+        else
+        {
+            using var shader = SphereShader(x, y, r, baseColor);
+            fill.Shader = shader;
+            canvas.DrawCircle(x, y, r, fill);
+            fill.Shader = null;
+        }
         if (outline is SKColor o)
         {
             stroke.Color = o;
             stroke.StrokeWidth = 2f;
             stroke.StrokeCap = SKStrokeCap.Butt;
             canvas.DrawCircle(x, y, r + 1.5f, stroke);
+        }
+    }
+
+    /// <summary>A light from the upper left, as a sphere looks under the viewer's light.</summary>
+    static SKShader SphereShader(float x, float y, float r, Rgba color)
+    {
+        Rgba light = Rgba.Lerp(color, Rgba.White, 0.55f) with { A = color.A };
+        Rgba dark = color.Shade(0.45f);
+        return SKShader.CreateRadialGradient(
+            new SKPoint(x - 0.35f * r, y - 0.35f * r), 1.35f * r,
+            [new SKColor(light.ToArgb()), new SKColor(color.ToArgb()), new SKColor(dark.ToArgb())],
+            [0f, 0.45f, 1f], SKShaderTileMode.Clamp);
+    }
+
+    /// <summary>
+    /// Wedges from twelve o'clock, clockwise on the screen, each with the sphere shading in its own color. What the
+    /// fractions leave of the turn stays empty, with the outline of the whole disc so the atom is still seen.
+    /// </summary>
+    static void PaintSectors(SKCanvas canvas, float x, float y, float r, Rgba baseColor,
+        IReadOnlyList<SphereSector> sectors, SKPaint fill, SKPaint stroke)
+    {
+        var oval = new SKRect(x - r, y - r, x + r, y + r);
+        float start = -90f, total = 0f;
+        foreach (SphereSector sector in sectors)
+        {
+            float fraction = MathF.Min(MathF.Max(sector.Fraction, 0f), 1f - total);
+            if (fraction <= 0f)
+                continue;
+            float sweep = 360f * fraction;
+            using var path = new SKPath();
+            if (fraction >= 1f - 1e-6f)
+            {
+                path.AddCircle(x, y, r);
+            }
+            else
+            {
+                path.MoveTo(x, y);
+                path.ArcTo(oval, start, sweep, false);
+                path.Close();
+            }
+            using var shader = SphereShader(x, y, r, sector.Color);
+            fill.Shader = shader;
+            canvas.DrawPath(path, fill);
+            fill.Shader = null;
+            start += sweep;
+            total += fraction;
+        }
+        if (total < 1f - 1e-6f)
+        {
+            stroke.Color = new SKColor(baseColor.Shade(0.45f).ToArgb());
+            stroke.StrokeWidth = 1.5f;
+            stroke.StrokeCap = SKStrokeCap.Butt;
+            canvas.DrawCircle(x, y, r, stroke);
         }
     }
 

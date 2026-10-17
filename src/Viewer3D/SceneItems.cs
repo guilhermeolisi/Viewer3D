@@ -73,7 +73,21 @@ public sealed class SphereItem : SceneItem
 
     /// <summary>Base color.</summary>
     public Rgba Color { get; init; } = Rgba.Gray;
+
+    /// <summary>
+    /// Optional sectors: the disc is painted as wedges, one per sector, starting at twelve o'clock and going clockwise,
+    /// each wedge taking its <see cref="SphereSector.Fraction"/> of the turn. When the fractions add up to less than 1,
+    /// the rest of the disc is left empty and only its outline is drawn, in a shade of <see cref="Color"/>. Null or
+    /// empty paints the whole disc with <see cref="Color"/>. Used for a site shared by several elements, or partly
+    /// occupied.
+    /// </summary>
+    public IReadOnlyList<SphereSector>? Sectors { get; init; }
 }
+
+/// <summary>One wedge of a <see cref="SphereItem"/> painted in sectors.</summary>
+/// <param name="Fraction">Share of the full turn, between 0 and 1.</param>
+/// <param name="Color">Color of the wedge.</param>
+public readonly record struct SphereSector(float Fraction, Rgba Color);
 
 /// <summary>
 /// A rod (a cylinder seen as a thick segment) between two points, drawn as two halves, each with the color of its
