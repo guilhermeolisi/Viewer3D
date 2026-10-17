@@ -79,8 +79,40 @@ public sealed record CrystalBond(int First, int Second, LatticeShift Shift)
     public int SourceIndex { get; init; } = -1;
 }
 
+/// <summary>One vertex of a <see cref="CrystalPolyhedron"/>: an atom, translated as the second atom of a bond.</summary>
+/// <param name="Atom">Index of the vertex atom, in <see cref="CrystalStructure.Atoms"/>.</param>
+/// <param name="Shift">
+/// Cell translation applied to the vertex atom, from the coordinates as given, with the center atom at its coordinates
+/// as given (the rule of <see cref="CrystalBond.Shift"/>).
+/// </param>
+public readonly record struct PolyhedronVertex(int Atom, LatticeShift Shift);
+
+/// <summary>
+/// A coordination polyhedron around one atom, as its owner computed it: the layer does not compute hulls, it draws the
+/// faces in the order given. Drawn by <see cref="CrystalStyle.Polyhedra"/> and
+/// <see cref="CrystalStyle.PolyhedraWithEllipsoids"/> around every drawn image of the center.
+/// </summary>
+/// <param name="Center">Index of the center atom, in <see cref="CrystalStructure.Atoms"/>.</param>
+/// <param name="Vertices">The vertices.</param>
+/// <param name="Faces">
+/// The faces, each a polygon of three or more indices into <paramref name="Vertices"/>, counter-clockwise seen from
+/// outside. A polyhedron with an index out of range is not drawn.
+/// </param>
+public sealed record CrystalPolyhedron(int Center, IReadOnlyList<PolyhedronVertex> Vertices, IReadOnlyList<int[]> Faces)
+{
+    /// <summary>Color of the faces, without alpha (the opacity is an option of the scene); null takes the center's color.</summary>
+    public Rgba? Color { get; init; }
+
+    /// <summary>Index of the polyhedron in the owner's own data, for reporting a selection back. -1 when unused.</summary>
+    public int SourceIndex { get; init; } = -1;
+}
+
 /// <summary>A crystal structure: the cell, the atoms in it and the bonds between them.</summary>
 /// <param name="Cell">The unit cell.</param>
 /// <param name="Atoms">The atoms, each at its own position (equivalent atoms listed one by one).</param>
 /// <param name="Bonds">The bonds; may be empty.</param>
-public sealed record CrystalStructure(CrystalCell Cell, IReadOnlyList<CrystalAtom> Atoms, IReadOnlyList<CrystalBond> Bonds);
+public sealed record CrystalStructure(CrystalCell Cell, IReadOnlyList<CrystalAtom> Atoms, IReadOnlyList<CrystalBond> Bonds)
+{
+    /// <summary>The coordination polyhedra; may be empty. Only the polyhedra styles draw them.</summary>
+    public IReadOnlyList<CrystalPolyhedron> Polyhedra { get; init; } = [];
+}

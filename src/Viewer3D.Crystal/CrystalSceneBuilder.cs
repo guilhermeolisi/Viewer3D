@@ -31,8 +31,16 @@ namespace Viewer3D.Crystal;
 /// they leave the shapes at their ends.
 /// </para>
 /// <para>
-/// Spheres are shaded by the viewer with a light from the upper left. A mesh added to the same scene (coordination
-/// polyhedra) should use <see cref="MeshLighting.KeyLight"/>, whose light comes from the same side.
+/// In the polyhedra styles each polyhedron of <see cref="CrystalStructure.Polyhedra"/> is drawn around every drawn image
+/// of its center (block and far faces), with its vertices at the images the bond rule gives, so a polyhedron around a
+/// center on the far face of the block is whole: its vertices outside the block are faded spheres
+/// (<see cref="CrystalSceneOptions.CompleteCoordination"/>). Each copy is one translucent mesh, its faces fanned into
+/// triangles in the given turn and its edges the sides of the faces. Rods are drawn as in ball and stick, the ones from
+/// a center to its vertices only with <see cref="CrystalSceneOptions.ShowBondsInsidePolyhedra"/>.
+/// </para>
+/// <para>
+/// Spheres are shaded by the viewer with a light from the upper left. The polyhedra use
+/// <see cref="MeshLighting.KeyLight"/>, whose light comes from the same side.
 /// </para>
 /// </remarks>
 public sealed class CrystalSceneBuilder
@@ -58,10 +66,15 @@ public sealed class CrystalSceneBuilder
             Math.Clamp(options.RepeatC, 1, 3));
         var context = new Context(structure, options, basis);
         CrystalScene scene = context.Build(n, null);
-        if (scene.AtomCount > CrystalSceneOptions.MaxAtoms && n != new LatticeShift(1, 1, 1))
+        int cost = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
+        if (cost > CrystalSceneOptions.MaxAtoms && n != new LatticeShift(1, 1, 1))
         {
-            string warning = $"{n.A} x {n.B} x {n.C} cells would draw {scene.AtomCount} atoms, more than "
-                + $"{CrystalSceneOptions.MaxAtoms}; showing one cell.";
+            string warning = scene.PolyhedronCount == 0
+                ? $"{n.A} x {n.B} x {n.C} cells would draw {scene.AtomCount} atoms, more than "
+                    + $"{CrystalSceneOptions.MaxAtoms}; showing one cell."
+                : $"{n.A} x {n.B} x {n.C} cells would draw {scene.AtomCount} atoms and {scene.PolyhedronCount} polyhedra, "
+                    + $"more than the {CrystalSceneOptions.MaxAtoms} atoms allowed (a polyhedron counts as "
+                    + $"{CrystalSceneOptions.PolyhedronCost}); showing one cell.";
             scene = context.Build(new LatticeShift(1, 1, 1), warning);
         }
         return scene;
@@ -81,6 +94,7 @@ public sealed class CrystalSceneBuilder
         readonly IReadOnlyList<SphereSector>?[] sectors;
         readonly DisplacementShape[]?[] shapes;
         readonly bool thermal;
+        readonly bool polyhedra;
         readonly double scale;
 
         public Context(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis)
@@ -102,7 +116,8 @@ public sealed class CrystalSceneBuilder
                 color[i] = ColorOf(main);
                 sectors[i] = SectorsOf(atom);
             }
-            thermal = options.Style == CrystalStyle.ThermalEllipsoids;
+            thermal = options.Style is CrystalStyle.ThermalEllipsoids or CrystalStyle.PolyhedraWithEllipsoids;
+            polyhedra = options.Style is CrystalStyle.Polyhedra or CrystalStyle.PolyhedraWithEllipsoids;
             shapes = new DisplacementShape[]?[atoms.Count];
             if (thermal)
             {
@@ -176,6 +191,28 @@ public sealed class CrystalSceneBuilder
                         }
             }
 
+            // Poliedros: uma instancia por imagem desenhada do centro. Sem os vertices, a imagem que e vertice e nao e
+            // centro sai com rotulo e bastoes; sem os bastoes internos, sai o bastao centro-vertice de cada instancia.
+            List<PolyhedronInstance> instances = polyhedra ? Instances(own, boundary) : [];
+            var hidden = new HashSet<(int, LatticeShift)>();
+            var inside = new HashSet<((int, LatticeShift), (int, LatticeShift))>();
+            if (instances.Count > 0)
+            {
+                var centers = new HashSet<(int, LatticeShift)>(instances.Select(p => (p.Center, p.Image)));
+                foreach (PolyhedronInstance p in instances)
+                {
+                    foreach ((int, LatticeShift) vertex in p.Vertices)
+                    {
+                        if (!options.ShowPolyhedronVertices && !centers.Contains(vertex))
+                            hidden.Add(vertex);
+                        if (!options.ShowBondsInsidePolyhedra)
+                            inside.Add(Order((p.Center, p.Image), vertex));
+                    }
+                }
+                own.RemoveAll(hidden.Contains);
+                boundary.RemoveAll(hidden.Contains);
+            }
+
             void AddSphere(int atom, LatticeShift t, bool faded)
             {
                 Vector3 p = Position(atom, t);
@@ -229,12 +266,25 @@ public sealed class CrystalSceneBuilder
             foreach ((int atom, LatticeShift t) in boundary)
                 AddSphere(atom, t, false);
 
+            // Vertice fora do bloco, de qualquer instancia (de centro proprio ou da fronteira): esfera esmaecida.
+            var completions = new HashSet<(int, LatticeShift)>();
+            if (options.CompleteCoordination && options.ShowPolyhedronVertices)
+            {
+                foreach (PolyhedronInstance p in instances)
+                {
+                    foreach ((int atom, LatticeShift u) in p.Vertices)
+                    {
+                        if (!drawn.ContainsKey((atom, u)) && completions.Add((atom, u)))
+                            AddSphere(atom, u, true);
+                    }
+                }
+            }
+
             // Ligacoes: de cada imagem desenhada, nos dois sentidos de cada ligacao dada. Vizinho fora do bloco so a
             // partir de imagem propria, e entao com esfera esmaecida ou sem a ligacao.
             var ownSet = new HashSet<(int, LatticeShift)>(own);
             var pairs = new HashSet<((int, LatticeShift), (int, LatticeShift))>();
             var rods = new List<(int Bond, int First, LatticeShift FirstImage, int Second, LatticeShift SecondImage)>();
-            var completions = new HashSet<(int, LatticeShift)>();
             var origins = new List<(int Atom, LatticeShift Image)>(own.Count + boundary.Count);
             origins.AddRange(own);
             origins.AddRange(boundary);
@@ -246,6 +296,8 @@ public sealed class CrystalSceneBuilder
                 foreach ((int bond, int other, LatticeShift shift) in list)
                 {
                     LatticeShift u = t + shift;
+                    if (hidden.Contains((other, u)))
+                        continue;
                     bool partnerDrawn = drawn.ContainsKey((other, u));
                     if (!partnerDrawn)
                     {
@@ -259,13 +311,18 @@ public sealed class CrystalSceneBuilder
                 }
             }
             foreach ((int atom, LatticeShift t) in completions)
-                AddSphere(atom, t, true);
+            {
+                if (!drawn.ContainsKey((atom, t)))
+                    AddSphere(atom, t, true);
+            }
 
-            if (options.Style is CrystalStyle.BallAndStick or CrystalStyle.ThermalEllipsoids)
+            if (options.Style is not CrystalStyle.SpaceFilling)
             {
                 float rodRadius = (float)(thermal ? 0.4 * options.BondRadius : options.BondRadius);
                 foreach ((int bond, int first, LatticeShift ft, int second, LatticeShift st) in rods)
                 {
+                    if (inside.Count > 0 && inside.Contains(Order((first, ft), (second, st))))
+                        continue;
                     bool faded = completions.Contains((first, ft)) || completions.Contains((second, st));
                     int id = nextId++;
                     Vector3 start = drawn[(first, ft)], end = drawn[(second, st)];
@@ -282,6 +339,16 @@ public sealed class CrystalSceneBuilder
                     });
                     lookup[id] = new CrystalItemInfo(CrystalItemKind.Bond, first, bond, ft - reduced[first].Floor, faded);
                 }
+            }
+
+            foreach (PolyhedronInstance p in instances)
+            {
+                int id = nextId++;
+                items.Add(Mesh(p, id));
+                lookup[id] = new CrystalItemInfo(CrystalItemKind.Polyhedron, p.Center, -1, p.Image - reduced[p.Center].Floor, false)
+                {
+                    PolyhedronIndex = p.Index,
+                };
             }
 
             AddCellEdges(items, n);
@@ -305,8 +372,118 @@ public sealed class CrystalSceneBuilder
                 new(structure.Cell.BVector, "b"),
                 new(structure.Cell.CVector, "c"),
             };
-            int atomCount = own.Count + boundary.Count + completions.Count;
-            return new CrystalScene(new Scene(items), structure.Cell, axes, scale, Legend(), atomCount, warning, lookup);
+            return new CrystalScene(new Scene(items), structure.Cell, axes, scale, Legend(), drawn.Count, warning, lookup,
+                instances.Count);
+        }
+
+        /// <summary>One drawn copy of a polyhedron: around the image <see cref="Image"/> of its center.</summary>
+        readonly record struct PolyhedronInstance(int Index, int Center, LatticeShift Image, (int Atom, LatticeShift Image)[] Vertices);
+
+        /// <summary>
+        /// Every enabled, valid polyhedron around every drawn image of its center. Vertex i of the copy around image t
+        /// is at image <c>t + Floor(vertex) + Shift - Floor(center)</c> of its atom, the rule of the bonds.
+        /// </summary>
+        List<PolyhedronInstance> Instances(List<(int Atom, LatticeShift Image)> own, List<(int Atom, LatticeShift Image)> boundary)
+        {
+            var result = new List<PolyhedronInstance>();
+            IReadOnlyList<CrystalPolyhedron> list = structure.Polyhedra;
+            if (list.Count == 0)
+                return result;
+            var images = new Dictionary<int, List<LatticeShift>>();
+            foreach ((int atom, LatticeShift t) in own.Concat(boundary))
+            {
+                if (!images.TryGetValue(atom, out List<LatticeShift>? atomImages))
+                    images[atom] = atomImages = [];
+                atomImages.Add(t);
+            }
+            for (int k = 0; k < list.Count; k++)
+            {
+                CrystalPolyhedron p = list[k];
+                if (options.EnabledPolyhedra is { } enabled && !enabled.Contains(k))
+                    continue;
+                if (!IsValid(p) || !images.TryGetValue(p.Center, out List<LatticeShift>? centerImages))
+                    continue;
+                foreach (LatticeShift t in centerImages)
+                {
+                    var vertices = new (int, LatticeShift)[p.Vertices.Count];
+                    for (int i = 0; i < vertices.Length; i++)
+                    {
+                        PolyhedronVertex v = p.Vertices[i];
+                        vertices[i] = (v.Atom, t + reduced[v.Atom].Floor + v.Shift - reduced[p.Center].Floor);
+                    }
+                    result.Add(new PolyhedronInstance(k, p.Center, t, vertices));
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Center and vertex atoms in range, and every face a polygon of vertices in range.</summary>
+        bool IsValid(CrystalPolyhedron p)
+        {
+            int count = structure.Atoms.Count;
+            if ((uint)p.Center >= (uint)count || p.Vertices is not { Count: >= 3 } vertices || p.Faces is not { Count: >= 1 } faces)
+                return false;
+            foreach (PolyhedronVertex v in vertices)
+            {
+                if ((uint)v.Atom >= (uint)count)
+                    return false;
+            }
+            foreach (int[] face in faces)
+            {
+                if (face is not { Length: >= 3 })
+                    return false;
+                foreach (int i in face)
+                {
+                    if ((uint)i >= (uint)vertices.Count)
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The mesh of one copy: each face as a fan of triangles from its first vertex (keeping its turn, so the front
+        /// side is outside), and each side of a face as an edge, once. The face diagonals are not edges.
+        /// </summary>
+        MeshItem Mesh(PolyhedronInstance instance, int id)
+        {
+            CrystalPolyhedron polyhedron = structure.Polyhedra[instance.Index];
+            var positions = new Vector3[instance.Vertices.Length];
+            for (int i = 0; i < positions.Length; i++)
+                positions[i] = Position(instance.Vertices[i].Atom, instance.Vertices[i].Image);
+            var indices = new List<int>();
+            var edges = new List<int>();
+            var sides = new HashSet<(int, int)>();
+            foreach (int[] face in polyhedron.Faces)
+            {
+                for (int k = 1; k + 1 < face.Length; k++)
+                {
+                    indices.Add(face[0]);
+                    indices.Add(face[k]);
+                    indices.Add(face[k + 1]);
+                }
+                for (int k = 0; k < face.Length; k++)
+                {
+                    int a = face[k], b = face[(k + 1) % face.Length];
+                    if (sides.Add((Math.Min(a, b), Math.Max(a, b))))
+                    {
+                        edges.Add(a);
+                        edges.Add(b);
+                    }
+                }
+            }
+            double opacity = double.IsFinite(options.PolyhedronOpacity) ? Math.Clamp(options.PolyhedronOpacity, 0, 1) : 0.35;
+            Rgba faceColor = (polyhedron.Color ?? color[instance.Center]) with { A = (byte)Math.Round(255 * opacity) };
+            return new MeshItem
+            {
+                Id = id,
+                Positions = positions,
+                Indices = [.. indices],
+                Edges = [.. edges],
+                Color = faceColor,
+                Lighting = MeshLighting.KeyLight,
+                DoubleSided = options.PolyhedronBackFaces,
+            };
         }
 
         Vector3 Position(int atom, LatticeShift t)

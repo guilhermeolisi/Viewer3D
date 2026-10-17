@@ -69,4 +69,105 @@ internal static class Fixtures
     /// <summary>Magnesio HC, a = 3,2094 A, c = 5,2108 A, 2c: vizinho fora do plano a sqrt(a^2/3 + c^2/4) = 3,1966 A.</summary>
     public static CrystalStructure Magnesium()
         => Metal("Mg", new CrystalCell(3.2094, 3.2094, 5.2108, 90, 90, 120), (1.0 / 3, 2.0 / 3, 0.25), (2.0 / 3, 1.0 / 3, 0.75));
+
+    /// <summary>
+    /// The polyhedron around atom <paramref name="center"/>: the atoms accepted by the filter closer than
+    /// <paramref name="limit"/> (images -1..1), with their convex hull as faces (<see cref="HullFaces"/>).
+    /// </summary>
+    public static CrystalPolyhedron PolyhedronAround(CrystalCell cell, IReadOnlyList<CrystalAtom> atoms, int center, double limit,
+        Func<CrystalAtom, bool> accept)
+    {
+        CellBasis basis = cell.Basis();
+        CrystalAtom c = atoms[center];
+        var vertices = new List<PolyhedronVertex>();
+        var relative = new List<System.Numerics.Vector3>();
+        for (int j = 0; j < atoms.Count; j++)
+        {
+            if (j == center || !accept(atoms[j]))
+                continue;
+            for (int a = -1; a <= 1; a++)
+                for (int b = -1; b <= 1; b++)
+                    for (int k = -1; k <= 1; k++)
+                    {
+                        var s = new LatticeShift(a, b, k);
+                        if (Distance(cell, c, atoms[j], s) >= limit)
+                            continue;
+                        vertices.Add(new PolyhedronVertex(j, s));
+                        relative.Add(basis.ToCartesian(atoms[j].X + a - c.X, atoms[j].Y + b - c.Y, atoms[j].Z + k - c.Z));
+                    }
+        }
+        return new CrystalPolyhedron(center, vertices, HullFaces(relative));
+    }
+
+    /// <summary>
+    /// Faces of the convex hull of points around the origin, coplanar triangles merged into one polygon, each
+    /// counter-clockwise seen from outside. Brute force over every triple: fine for a dozen points.
+    /// </summary>
+    public static List<int[]> HullFaces(IReadOnlyList<System.Numerics.Vector3> p)
+    {
+        var faces = new List<int[]>();
+        var seen = new HashSet<string>();
+        for (int i = 0; i < p.Count; i++)
+            for (int j = i + 1; j < p.Count; j++)
+                for (int k = j + 1; k < p.Count; k++)
+                {
+                    System.Numerics.Vector3 normal = System.Numerics.Vector3.Cross(p[j] - p[i], p[k] - p[i]);
+                    if (normal.Length() < 1e-6f)
+                        continue;
+                    normal = System.Numerics.Vector3.Normalize(normal);
+                    float d = System.Numerics.Vector3.Dot(normal, p[i]);
+                    bool above = false, below = false;
+                    var on = new List<int>();
+                    for (int m = 0; m < p.Count; m++)
+                    {
+                        float s = System.Numerics.Vector3.Dot(normal, p[m]) - d;
+                        if (MathF.Abs(s) < 1e-4f) on.Add(m);
+                        else if (s > 0) above = true;
+                        else below = true;
+                    }
+                    if (above && below)
+                        continue;
+                    if (above)
+                        normal = -normal;
+                    if (!seen.Add(string.Join(",", on.Order())))
+                        continue;
+                    var centroid = System.Numerics.Vector3.Zero;
+                    foreach (int m in on)
+                        centroid += p[m];
+                    centroid /= on.Count;
+                    System.Numerics.Vector3 u = System.Numerics.Vector3.Normalize(p[on[0]] - centroid);
+                    System.Numerics.Vector3 w = System.Numerics.Vector3.Cross(normal, u);
+                    faces.Add([.. on.OrderBy(m => MathF.Atan2(System.Numerics.Vector3.Dot(p[m] - centroid, w),
+                        System.Numerics.Vector3.Dot(p[m] - centroid, u)))]);
+                }
+        return faces;
+    }
+
+    /// <summary>The fluorite with a cube of F around each of its four Ca.</summary>
+    public static CrystalStructure FluoriteWithCubes()
+    {
+        CrystalStructure s = Fluorite();
+        return s with
+        {
+            Polyhedra = [.. Enumerable.Range(0, 4).Select(i => PolyhedronAround(s.Cell, s.Atoms, i, 2.5, a => a.Element == "F"))],
+        };
+    }
+
+    /// <summary>
+    /// Coordenacao 8 em bipiramide hexagonal (12 faces triangulares, 18 arestas), numa celula cubica de 10 A: Zr no
+    /// centro, seis O no equador e dois nos polos, todos a 2 A.
+    /// </summary>
+    public static CrystalStructure HexagonalBipyramid()
+    {
+        var atoms = new List<CrystalAtom> { new("Zr1", "Zr", 0.5, 0.5, 0.5) };
+        for (int k = 0; k < 6; k++)
+            atoms.Add(new CrystalAtom("O1", "O", 0.5 + 0.2 * Math.Cos(k * Math.PI / 3), 0.5 + 0.2 * Math.Sin(k * Math.PI / 3), 0.5));
+        atoms.Add(new CrystalAtom("O2", "O", 0.5, 0.5, 0.3));
+        atoms.Add(new CrystalAtom("O2", "O", 0.5, 0.5, 0.7));
+        var cell = new CrystalCell(10, 10, 10, 90, 90, 90);
+        return new CrystalStructure(cell, atoms, [])
+        {
+            Polyhedra = [PolyhedronAround(cell, atoms, 0, 2.1, a => a.Element == "O")],
+        };
+    }
 }

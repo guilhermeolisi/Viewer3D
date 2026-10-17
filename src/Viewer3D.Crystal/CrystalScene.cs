@@ -1,6 +1,6 @@
 namespace Viewer3D.Crystal;
 
-/// <summary>How the atoms of a crystal structure are drawn. Later styles (polyhedra) add values at the end.</summary>
+/// <summary>How the atoms of a crystal structure are drawn. New styles add values at the end.</summary>
 public enum CrystalStyle
 {
     /// <summary>Small spheres, <see cref="CrystalSceneOptions.BallScale"/> times the atom radius, joined by rods.</summary>
@@ -18,6 +18,16 @@ public enum CrystalStyle
     /// small cube when it is not positive definite, and a small dashed sphere when there is no data.
     /// </summary>
     ThermalEllipsoids,
+
+    /// <summary>
+    /// <see cref="BallAndStick"/> with the coordination polyhedra of <see cref="CrystalStructure.Polyhedra"/> around each
+    /// drawn image of their centers: translucent faces (<see cref="CrystalSceneOptions.PolyhedronOpacity"/>) with their
+    /// edges, lit like the spheres.
+    /// </summary>
+    Polyhedra,
+
+    /// <summary><see cref="Polyhedra"/> with the atoms drawn as in <see cref="ThermalEllipsoids"/>.</summary>
+    PolyhedraWithEllipsoids,
 }
 
 /// <summary>Options of <see cref="CrystalSceneBuilder.Build"/>.</summary>
@@ -28,6 +38,12 @@ public sealed record CrystalSceneOptions
     /// <see cref="CrystalScene.Warning"/>.
     /// </summary>
     public const int MaxAtoms = 3000;
+
+    /// <summary>
+    /// What one polyhedron counts for against <see cref="MaxAtoms"/>, in spheres: its faces and edges cost about as
+    /// much to prepare and paint as this many spheres. Provisional, to be set from the polyhedra benchmark.
+    /// </summary>
+    public const int PolyhedronCost = 8;
 
     /// <summary>Drawing style.</summary>
     public CrystalStyle Style { get; init; } = CrystalStyle.BallAndStick;
@@ -76,6 +92,27 @@ public sealed record CrystalSceneOptions
     /// </summary>
     public bool PrincipalEllipses { get; init; } = true;
 
+    /// <summary>Opacity of the polyhedron faces, from 0 (invisible) to 1 (opaque), in the polyhedra styles.</summary>
+    public double PolyhedronOpacity { get; init; } = 0.35;
+
+    /// <summary>
+    /// Draws the vertex atoms of the polyhedra. Off, an image that is a vertex of a drawn polyhedron and not the center
+    /// of one is left out, with its label and rods; the centers always stay.
+    /// </summary>
+    public bool ShowPolyhedronVertices { get; init; } = true;
+
+    /// <summary>Draws the rods from the center of a drawn polyhedron to its vertices.</summary>
+    public bool ShowBondsInsidePolyhedra { get; init; } = true;
+
+    /// <summary>
+    /// Draws the back faces of the polyhedra, seen through the front ones. A scene for gestures can turn them off: half
+    /// the faces, and the front ones still show the shape.
+    /// </summary>
+    public bool PolyhedronBackFaces { get; init; } = true;
+
+    /// <summary>The polyhedra drawn, as indices into <see cref="CrystalStructure.Polyhedra"/>; null draws them all.</summary>
+    public IReadOnlySet<int>? EnabledPolyhedra { get; init; }
+
     /// <summary>Colors by element symbol, over those of <see cref="ElementTable"/>.</summary>
     public IReadOnlyDictionary<string, Rgba>? ElementColors { get; init; }
 
@@ -96,17 +133,27 @@ public enum CrystalItemKind
 
     /// <summary>A rod.</summary>
     Bond,
+
+    /// <summary>A coordination polyhedron, its faces or its edges.</summary>
+    Polyhedron,
 }
 
-/// <summary>What a sphere or rod of a <see cref="CrystalScene"/> stands for.</summary>
-/// <param name="Kind">Sphere or rod.</param>
-/// <param name="AtomIndex">The atom, in <see cref="CrystalStructure.Atoms"/>; for a rod, its first atom.</param>
-/// <param name="BondIndex">The bond, in <see cref="CrystalStructure.Bonds"/>; -1 for a sphere.</param>
+/// <summary>What a sphere, rod or polyhedron of a <see cref="CrystalScene"/> stands for.</summary>
+/// <param name="Kind">Sphere, rod or polyhedron.</param>
+/// <param name="AtomIndex">
+/// The atom, in <see cref="CrystalStructure.Atoms"/>; for a rod, its first atom; for a polyhedron, its center.
+/// </param>
+/// <param name="BondIndex">The bond, in <see cref="CrystalStructure.Bonds"/>; -1 for a sphere or a polyhedron.</param>
 /// <param name="Offset">
-/// Cell translation from the coordinates of the atom as given to where it is drawn (for a rod, of its first atom).
+/// Cell translation from the coordinates of the atom as given to where it is drawn (for a rod, of its first atom; for
+/// a polyhedron, of its center).
 /// </param>
 /// <param name="IsCompletion">True for a faded sphere outside the block, or a rod to one.</param>
-public sealed record CrystalItemInfo(CrystalItemKind Kind, int AtomIndex, int BondIndex, LatticeShift Offset, bool IsCompletion);
+public sealed record CrystalItemInfo(CrystalItemKind Kind, int AtomIndex, int BondIndex, LatticeShift Offset, bool IsCompletion)
+{
+    /// <summary>The polyhedron, in <see cref="CrystalStructure.Polyhedra"/>; -1 for a sphere or a rod.</summary>
+    public int PolyhedronIndex { get; init; } = -1;
+}
 
 /// <summary>The scene of a crystal structure, with what the viewer around it needs.</summary>
 public sealed class CrystalScene
@@ -114,7 +161,8 @@ public sealed class CrystalScene
     readonly IReadOnlyDictionary<int, CrystalItemInfo> lookup;
 
     internal CrystalScene(Scene scene, CrystalCell cell, IReadOnlyList<AxisDirection> axes, double sphereScale,
-        IReadOnlyList<ElementLegendEntry> legend, int atomCount, string? warning, IReadOnlyDictionary<int, CrystalItemInfo> lookup)
+        IReadOnlyList<ElementLegendEntry> legend, int atomCount, string? warning, IReadOnlyDictionary<int, CrystalItemInfo> lookup,
+        int polyhedronCount = 0)
     {
         Scene = scene;
         Cell = cell;
@@ -122,11 +170,12 @@ public sealed class CrystalScene
         SphereScale = sphereScale;
         Legend = legend;
         AtomCount = atomCount;
+        PolyhedronCount = polyhedronCount;
         Warning = warning;
         this.lookup = lookup;
     }
 
-    /// <summary>The items: spheres, rods, cell edges and labels, in angstrom.</summary>
+    /// <summary>The items: spheres, rods, polyhedra, cell edges and labels, in angstrom.</summary>
     public Scene Scene { get; }
 
     /// <summary>The cell the scene was built from.</summary>
@@ -149,6 +198,9 @@ public sealed class CrystalScene
 
     /// <summary>Spheres in the scene, faded ones included.</summary>
     public int AtomCount { get; }
+
+    /// <summary>Polyhedra in the scene: one per drawn image of a center.</summary>
+    public int PolyhedronCount { get; }
 
     /// <summary>Why the scene is not what was asked (repetition past the ceiling, invalid cell); null when it is.</summary>
     public string? Warning { get; }
