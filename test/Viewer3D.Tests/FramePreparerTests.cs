@@ -98,12 +98,27 @@ public class FramePreparerTests
     }
 
     [Fact]
-    public void Prepare_KeyLight_FaceTurnedAwayFromTheLightGetsOnlyTheAmbient()
+    public void Prepare_KeyLight_FaceTurnedAwayFromBothLightsKeepsTheAmbient_SoItsColorShows()
     {
-        // Normal (0.6, -0.6, 0.2): dot with the light (-0.45, 0.55, 0.70) is negative.
+        // Normal (-0.5, -0.5, 0.02): the dot is negative with the key light (-0.45, 0.55, 0.70) and with the fill
+        // light (0.5, -0.4, 0.75), and the face still looks a little towards the viewer.
+        Vector3 away = new(-0.5f, -0.5f, 0.02f);
+        Assert.True(Vector3.Dot(Vector3.Normalize(away), FramePreparer.KeyLightDirection) < 0);
+        Assert.True(Vector3.Dot(Vector3.Normalize(away), FramePreparer.FillLightDirection) < 0);
+
+        Rgba color = Rgba.FromArgb(Prepare(Facing(away, new Rgba(40, 80, 200))).TriangleColors[0]);
+
+        Assert.Equal(new Rgba(40, 80, 200).Shade(FramePreparer.KeyLightAmbient), color);
+        Assert.True(FramePreparer.KeyLightAmbient > FramePreparer.Ambient);
+    }
+
+    [Fact]
+    public void Prepare_KeyLight_FillLightBrightensTheSideTheKeyLightLeavesDark()
+    {
+        // Normal (0.6, -0.6, 0.2): away from the key light, towards the fill light.
         byte red = Red(Facing(new(0.6f, -0.6f, 0.2f), Rgba.White));
 
-        Assert.Equal((byte)(255 * FramePreparer.Ambient + 0.5f), red);
+        Assert.True(red > (byte)(255 * FramePreparer.KeyLightAmbient + 0.5f), $"{red}");
     }
 
     [Fact]

@@ -24,8 +24,9 @@ public enum MeshLighting
 
     /// <summary>
     /// A light from the upper left, in front of the scene (<see cref="FramePreparer.KeyLightDirection"/>), with a small
-    /// white highlight. Slopes facing the light are bright and the others dark, which shows the relief of a surface
-    /// from any side. The light turns with the view, so it keeps coming from the upper left of the screen.
+    /// white highlight, a weak fill light from the lower right and a high ambient. Slopes facing the key light are
+    /// brighter and the others darker, which shows the relief of a surface from any side, while the darkest side keeps
+    /// its colors. The lights turn with the view, so the key light keeps coming from the upper left of the screen.
     /// </summary>
     KeyLight,
 }

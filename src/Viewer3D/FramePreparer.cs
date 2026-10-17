@@ -11,14 +11,29 @@ namespace Viewer3D;
 /// </summary>
 public sealed class FramePreparer
 {
-    /// <summary>Light that reaches faces turned away from the light.</summary>
+    /// <summary>Light that reaches faces turned away from the headlight.</summary>
     public const float Ambient = 0.35f;
+
+    /// <summary>
+    /// Light that reaches faces turned away from both lights of <see cref="MeshLighting.KeyLight"/>. Higher than
+    /// <see cref="Ambient"/>, so the darkest side of a surface still shows its colors.
+    /// </summary>
+    public const float KeyLightAmbient = 0.5f;
+
+    /// <summary>Strength of the key light, added to <see cref="KeyLightAmbient"/> on a face turned to it.</summary>
+    public const float KeyLightStrength = 0.4f;
+
+    /// <summary>Strength of the fill light, which softens the side the key light leaves dark.</summary>
+    public const float FillLightStrength = 0.15f;
 
     /// <summary>
     /// Unit direction towards the key light (<see cref="MeshLighting.KeyLight"/>), in view space (x right, y up, z
     /// towards the viewer): from the upper left and in front.
     /// </summary>
     public static readonly Vector3 KeyLightDirection = Vector3.Normalize(new Vector3(-0.45f, 0.55f, 0.70f));
+
+    /// <summary>Unit direction towards the fill light, in view space: from the lower right and in front.</summary>
+    public static readonly Vector3 FillLightDirection = Vector3.Normalize(new Vector3(0.5f, -0.4f, 0.75f));
 
     /// <summary>Strength of the white highlight of the key light, at its peak.</summary>
     public const float Highlight = 0.3f;
@@ -167,17 +182,18 @@ public sealed class FramePreparer
     }
 
     /// <summary>
-    /// Key light of a face with view-space normal (nx, ny, nz) of length <paramref name="len"/>: diffuse light plus the
-    /// strength of the highlight. The normal is taken on the side that faces the viewer, so the back of a double-sided
-    /// surface is lit like its front.
+    /// Key light of a face with view-space normal (nx, ny, nz) of length <paramref name="len"/>: ambient plus the key and
+    /// fill lights, and the strength of the highlight. The normal is taken on the side that faces the viewer, so the back
+    /// of a double-sided surface is lit like its front.
     /// </summary>
     static (float Light, float Shine) KeyLight(float nx, float ny, float nz, float len)
     {
         float s = nz < 0 ? -1f / len : 1f / len;
         var n = new Vector3(nx * s, ny * s, nz * s);
-        float diffuse = MathF.Max(0, Vector3.Dot(n, KeyLightDirection));
-        float shine = diffuse > 0 ? Highlight * MathF.Pow(MathF.Max(0, Vector3.Dot(n, HalfVector)), Shininess) : 0;
-        return (Ambient + (1 - Ambient) * diffuse, shine);
+        float key = MathF.Max(0, Vector3.Dot(n, KeyLightDirection));
+        float fill = MathF.Max(0, Vector3.Dot(n, FillLightDirection));
+        float shine = key > 0 ? Highlight * MathF.Pow(MathF.Max(0, Vector3.Dot(n, HalfVector)), Shininess) : 0;
+        return (KeyLightAmbient + KeyLightStrength * key + FillLightStrength * fill, shine);
     }
 
     /// <summary>A color shaded by <paramref name="light"/>, then pulled towards white by <paramref name="shine"/>.</summary>

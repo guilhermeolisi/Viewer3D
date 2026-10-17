@@ -49,7 +49,8 @@ Scenes are lists of items: `MeshItem` (triangles with a color per vertex or per 
 stick drawn in two halves, each with the color of its end, cut where it enters the spheres), `LineItem` and
 `LabelItem`. Each item has an `Id`, which picking reports back. A mesh is lit by a light at the eye
 (`MeshLighting.Headlight`, the default) or by a key light from the upper left of the screen with a small highlight
-(`MeshLighting.KeyLight`), which shows the relief of a surface seen head on.
+(`MeshLighting.KeyLight`), which shows the relief of a surface seen head on; a weak fill light and a high ambient keep
+the colors of the darker side.
 
 ## Interaction
 
