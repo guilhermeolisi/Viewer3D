@@ -194,8 +194,8 @@ public sealed class CrystalSceneBuilder
                 lookup[id] = new CrystalItemInfo(CrystalItemKind.Atom, atom, -1, t - reduced[atom].Floor, faded);
             }
 
-            // Estilo termico: um item por deslocamento do atomo, todos apontando para o mesmo atomo na selecao. Os
-            // setores de ocupacao so valem com um deslocamento so; com varios, cada um ja tem a cor do seu elemento.
+            // Thermal style: one item per displacement of the atom, all pointing to the same atom in the selection. The
+            // occupancy sectors apply only with a single displacement; with several, each one already has its element color.
             void AddShapes(int atom, LatticeShift t, Vector3 p, bool faded, IReadOnlyList<SphereSector>? s)
             {
                 DisplacementShape[] list = shapes[atom]!;
