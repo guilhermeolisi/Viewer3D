@@ -182,6 +182,64 @@ public class FramePreparerTests
     }
 
     [Fact]
+    public void Prepare_LinePartInsideASphereIsCutOut()
+    {
+        // An atom at a cell corner hides the end of the edge: nothing of the line is left between x = -0.5 and 0.5,
+        // which is 75 to 125 px. Half a pixel is the overlap of the joints.
+        var sphere = new SphereItem { Center = Vector3.Zero, Radius = 0.5f };
+        var line = new LineItem { Start = new Vector3(-1, 0, 0), End = new Vector3(1, 0, 0), Width = 1 };
+
+        DrawList list = Prepare(sphere, line);
+
+        Assert.True(list.SegmentCount > 0);
+        ReadOnlySpan<float> s = list.Segments;
+        for (int i = 0; i < list.SegmentCount; i++)
+        {
+            float lo = MathF.Min(s[5 * i], s[5 * i + 2]), hi = MathF.Max(s[5 * i], s[5 * i + 2]);
+            Assert.True(hi <= 75.5f || lo >= 124.5f, $"segment {i} runs from {lo} to {hi} px");
+        }
+    }
+
+    [Fact]
+    public void Prepare_BackOfALineIsPaintedBeforeASphereInFrontOfIt()
+    {
+        // The line runs from z = -2, right behind the sphere, to z = 2: its middle is in front of the sphere, but the
+        // part over the sphere's disc is behind it and must be painted first.
+        var sphere = new SphereItem { Center = new Vector3(0, 0, -1), Radius = 0.3f };
+        var line = new LineItem { Start = new Vector3(0, 0, -2), End = new Vector3(2, 0, 2), Width = 1 };
+
+        DrawList list = Prepare(sphere, line);
+
+        ReadOnlySpan<float> c = list.Circles;
+        float cx = c[0], cy = c[1], radius = c[2];
+        int circleAt = -1;
+        for (int k = 0; k < list.CommandCount; k++)
+        {
+            uint command = list.Commands[k];
+            if (DrawList.KindOf(command) == DrawKind.Circle)
+            {
+                circleAt = k;
+                continue;
+            }
+            if (circleAt < 0)
+                continue;
+            int i = DrawList.IndexOf(command);
+            ReadOnlySpan<float> s = list.Segments.Slice(5 * i, 4);
+            Assert.True(DistanceToSegment(cx, cy, s[0], s[1], s[2], s[3]) >= radius,
+                $"segment {i}, painted after the sphere, crosses its disc");
+        }
+        Assert.True(circleAt > 0);
+    }
+
+    static float DistanceToSegment(float px, float py, float x1, float y1, float x2, float y2)
+    {
+        float dx = x2 - x1, dy = y2 - y1;
+        float t = Math.Clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1);
+        float ex = x1 + t * dx - px, ey = y1 + t * dy - py;
+        return MathF.Sqrt(ex * ex + ey * ey);
+    }
+
+    [Fact]
     public void Prepare_ReusesTheListBetweenFrames()
     {
         var preparer = new FramePreparer();

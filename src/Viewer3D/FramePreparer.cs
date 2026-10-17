@@ -13,8 +13,16 @@ public sealed class FramePreparer
     /// <summary>Light that reaches faces turned away from the viewer.</summary>
     public const float Ambient = 0.35f;
 
+    /// <summary>Pieces of a line when the scene has no sphere to size them by.</summary>
+    const int LinePieces = 16;
+
+    /// <summary>Most pieces a single line is split into.</summary>
+    const int MaxLinePieces = 256;
+
     float[] vx = [], vy = [], vz = [], sx = [], sy = [];
     bool[] ok = [];
+    readonly List<SphereItem> spheres = [];
+    List<(float From, float To)> spans = [], spansScratch = [];
 
     /// <summary>Whether labels are added to the list.</summary>
     public bool IncludeLabels { get; set; } = true;
@@ -37,6 +45,12 @@ public sealed class FramePreparer
         Projector p = camera.CreateProjector(width, height);
         float bias = 1e-4f * camera.ViewRadius;
         IReadOnlyList<SceneItem> items = scene.Items;
+        spheres.Clear();
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i] is SphereItem sphere && sphere.Radius > 0)
+                spheres.Add(sphere);
+        }
         for (int i = 0; i < items.Count; i++)
         {
             switch (items[i])
@@ -170,12 +184,85 @@ public sealed class FramePreparer
         AddSegment(list, mx, my, bx, by, width, rod.EndColor.ToArgb(), itemIndex, true, vb.Z - bias);
     }
 
-    static void AddLine(DrawList list, in Projector p, LineItem line, int itemIndex)
+    /// <summary>
+    /// A line is a long object: with one depth for all of it, a cell edge that runs from the back to the front would be
+    /// painted over an atom in front of its back end. So the parts inside a sphere are cut out (an atom at a cell corner
+    /// hides the end of the edge), and the rest is split into pieces no longer than the smallest sphere radius, each with
+    /// the depth of its own middle. Outside every sphere, a point that projects onto a sphere's disc is either wholly in
+    /// front of it or wholly behind, so the per piece order is right up to the length of a piece.
+    /// </summary>
+    void AddLine(DrawList list, in Projector p, LineItem line, int itemIndex)
     {
-        Vector3 va = p.ToView(line.Start), vb = p.ToView(line.End);
-        if (!p.ProjectView(va, out float ax, out float ay, out _) || !p.ProjectView(vb, out float bx, out float by, out _))
+        Vector3 start = line.Start, d = line.End - line.Start;
+        float length2 = d.LengthSquared();
+        if (length2 == 0)
             return;
-        AddSegment(list, ax, ay, bx, by, line.Width, line.Color.ToArgb(), itemIndex, false, (va.Z + vb.Z) / 2);
+        float length = MathF.Sqrt(length2);
+
+        spans.Clear();
+        spans.Add((0f, 1f));
+        float smallest = float.MaxValue;
+        foreach (SphereItem sphere in spheres)
+        {
+            smallest = MathF.Min(smallest, sphere.Radius);
+            // |start + t d - center|^2 = r^2, with t in units of the whole line.
+            Vector3 m = start - sphere.Center;
+            float b = Vector3.Dot(m, d) / length2;
+            float c = (m.LengthSquared() - sphere.Radius * sphere.Radius) / length2;
+            float disc = b * b - c;
+            if (disc <= 0)
+                continue;
+            float root = MathF.Sqrt(disc);
+            float t0 = -b - root, t1 = -b + root;
+            if (t1 <= 0 || t0 >= 1)
+                continue;
+            CutOut(t0, t1);
+            if (spans.Count == 0)
+                return;
+        }
+
+        int whole = spheres.Count > 0 ? (int)MathF.Ceiling(length / smallest) : LinePieces;
+        whole = Math.Clamp(whole, 1, MaxLinePieces);
+        uint color = line.Color.ToArgb();
+        foreach ((float from, float to) in spans)
+        {
+            int pieces = Math.Max(1, (int)MathF.Ceiling(whole * (to - from)));
+            for (int k = 0; k < pieces; k++)
+            {
+                float ta = from + (to - from) * k / pieces, tb = from + (to - from) * (k + 1) / pieces;
+                Vector3 va = p.ToView(start + d * ta), vb = p.ToView(start + d * tb);
+                if (!p.ProjectView(va, out float ax, out float ay, out _) || !p.ProjectView(vb, out float bx, out float by, out _))
+                    continue;
+                // Pieces of one span overlap by half a pixel, so the antialiased joints leave no lighter dot.
+                float dx = bx - ax, dy = by - ay, screen = MathF.Sqrt(dx * dx + dy * dy);
+                if (screen > 0)
+                {
+                    float ox = 0.5f * dx / screen, oy = 0.5f * dy / screen;
+                    if (k > 0) { ax -= ox; ay -= oy; }
+                    if (k < pieces - 1) { bx += ox; by += oy; }
+                }
+                AddSegment(list, ax, ay, bx, by, line.Width, color, itemIndex, false, (va.Z + vb.Z) / 2);
+            }
+        }
+    }
+
+    /// <summary>Removes the interval (<paramref name="t0"/>, <paramref name="t1"/>) from the visible spans.</summary>
+    void CutOut(float t0, float t1)
+    {
+        spansScratch.Clear();
+        foreach ((float from, float to) in spans)
+        {
+            if (t1 <= from || t0 >= to)
+            {
+                spansScratch.Add((from, to));
+                continue;
+            }
+            if (t0 > from)
+                spansScratch.Add((from, t0));
+            if (t1 < to)
+                spansScratch.Add((t1, to));
+        }
+        (spans, spansScratch) = (spansScratch, spans);
     }
 
     static void AddSegment(DrawList list, float x1, float y1, float x2, float y2, float width, uint color, int item, bool rod, float depth)
