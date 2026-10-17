@@ -58,13 +58,18 @@ public static class Picker
     /// <summary>Extra pixels around thin segments that still count as a hit.</summary>
     public const float SegmentTolerance = 2f;
 
-    /// <summary>The front-most item under (<paramref name="x"/>, <paramref name="y"/>), or null.</summary>
+    /// <summary>
+    /// The front-most item under (<paramref name="x"/>, <paramref name="y"/>), or null. A translucent triangle (alpha below
+    /// 255) gives way to an opaque item seen through it, so the atom inside a translucent polyhedron can still be picked;
+    /// the translucent mesh is reported only when nothing opaque is behind it at that point.
+    /// </summary>
     public static PickResult? Pick(DrawList list, float x, float y)
     {
         ArgumentNullException.ThrowIfNull(list);
         if (list.Scene is null)
             return null;
         ReadOnlySpan<uint> commands = list.Commands;
+        PickResult? translucent = null;
         for (int c = commands.Length - 1; c >= 0; c--)
         {
             int i = DrawList.IndexOf(commands[c]);
@@ -72,7 +77,12 @@ public static class Picker
             {
                 case DrawKind.Triangle:
                     if (HitTriangle(list.TriXY, 6 * i, x, y, out Vector3 w))
-                        return new PickResult(list.Scene.Items[list.TriItem[i]], list.TriSource[i], w);
+                    {
+                        var hit = new PickResult(list.Scene.Items[list.TriItem[i]], list.TriSource[i], w);
+                        if (list.TriColor[3 * i] >> 24 == 255)
+                            return hit;
+                        translucent ??= hit;
+                    }
                     break;
                 case DrawKind.Circle:
                     float dx = x - list.CircleData[3 * i], dy = y - list.CircleData[3 * i + 1], r = list.CircleData[3 * i + 2];
@@ -89,7 +99,7 @@ public static class Picker
                     break;
             }
         }
-        return null;
+        return translucent;
     }
 
     static bool HitTriangle(float[] xy, int o, float x, float y, out Vector3 weights)

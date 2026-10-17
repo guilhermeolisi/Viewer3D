@@ -31,7 +31,12 @@ public enum MeshLighting
     KeyLight,
 }
 
-/// <summary>A triangle mesh. Triangles are counter-clockwise when seen from their front side.</summary>
+/// <summary>
+/// A triangle mesh. Triangles are counter-clockwise when seen from their front side. A color with alpha below 255 makes
+/// the faces translucent: they are blended over what is painted before them, back to front, which is right for convex
+/// meshes that only touch each other (a painter's approximation; meshes that cross each other are not resolved). A
+/// translucent closed mesh is usually <see cref="DoubleSided"/>, so its back faces show through, fainter.
+/// </summary>
 public sealed class MeshItem : SceneItem
 {
     /// <summary>Vertex positions.</summary>
@@ -57,6 +62,19 @@ public sealed class MeshItem : SceneItem
 
     /// <summary>How the faces are lit. The default, <see cref="MeshLighting.Headlight"/>, lights from the eye.</summary>
     public MeshLighting Lighting { get; init; }
+
+    /// <summary>
+    /// Optional edges to draw, as pairs of vertex indices: only these, not the sides of every triangle (the edges of a
+    /// polyhedron, not the diagonals of its faces). They are drawn like a <see cref="LineItem"/>, cut where they enter a
+    /// sphere, and picking one reports this mesh.
+    /// </summary>
+    public int[]? Edges { get; init; }
+
+    /// <summary>Color of the <see cref="Edges"/>; null uses an opaque shade of <see cref="Color"/>.</summary>
+    public Rgba? EdgeColor { get; init; }
+
+    /// <summary>Width of the <see cref="Edges"/>, in device-independent pixels.</summary>
+    public float EdgeWidth { get; init; } = 1.5f;
 
     /// <summary>Number of triangles.</summary>
     public int TriangleCount => Indices.Length / 3;

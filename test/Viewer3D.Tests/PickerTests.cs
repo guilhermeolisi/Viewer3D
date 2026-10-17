@@ -20,6 +20,40 @@ public class PickerTests
         Assert.Equal(-1, pick.TriangleIndex);
     }
 
+    static MeshItem FrontSquare(byte alpha, int id) => new()
+    {
+        Id = id,
+        Positions = [new(-1, -1, 1), new(1, -1, 1), new(1, 1, 1), new(-1, 1, 1)],
+        Indices = [0, 1, 2, 0, 2, 3],
+        Color = new Rgba(30, 90, 200, alpha),
+    };
+
+    [Fact]
+    public void Pick_OpaqueBehindTranslucent_ReturnsTheOpaque()
+    {
+        // O atomo dentro do poliedro translucido continua clicavel; com a face opaca, a face ganha.
+        var atom = new SphereItem { Id = 1, Center = new Vector3(0, 0, -0.5f), Radius = 0.3f };
+        DrawList translucent = new FramePreparer().Prepare(new Scene([FrontSquare(100, 2), atom]), Camera, 200, 200);
+        DrawList opaque = new FramePreparer().Prepare(new Scene([FrontSquare(255, 2), atom]), Camera, 200, 200);
+
+        Assert.Equal(1, Picker.Pick(translucent, 100, 100)?.ItemId);
+        Assert.Equal(2, Picker.Pick(opaque, 100, 100)?.ItemId);
+    }
+
+    [Fact]
+    public void Pick_TranslucentAlone_ReturnsTheMesh()
+    {
+        var atom = new SphereItem { Id = 1, Center = new Vector3(0, 0, -0.5f), Radius = 0.3f };
+        DrawList list = new FramePreparer().Prepare(new Scene([FrontSquare(100, 2), atom]), Camera, 200, 200);
+
+        // Fora do disco do atomo, so a face translucida esta sob o ponto.
+        PickResult? pick = Picker.Pick(list, 60, 60);
+
+        Assert.NotNull(pick);
+        Assert.Equal(2, pick.ItemId);
+        Assert.True(pick.TriangleIndex >= 0);
+    }
+
     [Fact]
     public void Pick_OutsideEverything_ReturnsNull()
     {

@@ -50,6 +50,15 @@ public sealed class FramePreparer
     /// <summary>Most pieces a single line is split into.</summary>
     const int MaxLinePieces = 256;
 
+    /// <summary>
+    /// Most pieces a mesh edge is split into. Edges are short and many (a polyhedron has a dozen or more), so they get a
+    /// lower cap than a line.
+    /// </summary>
+    public const int MaxEdgePieces = 8;
+
+    /// <summary>Shade of the mesh color used for its edges when <see cref="MeshItem.EdgeColor"/> is null.</summary>
+    const float EdgeShade = 0.55f;
+
     float[] vx = [], vy = [], vz = [], sx = [], sy = [];
     bool[] ok = [];
     readonly List<SphereItem> spheres = [];
@@ -186,6 +195,17 @@ public sealed class FramePreparer
         }
         list.TriangleCount = tc;
         list.CommandCount = cc;
+
+        if (mesh.Edges is not { Length: >= 2 } edges)
+            return;
+        Rgba shade = fallback.Shade(EdgeShade);
+        uint edgeColor = (mesh.EdgeColor ?? new Rgba(shade.R, shade.G, shade.B)).ToArgb();
+        for (int e = 0; e + 1 < edges.Length; e += 2)
+        {
+            int a = edges[e], b = edges[e + 1];
+            if ((uint)a < (uint)n && (uint)b < (uint)n)
+                AddSegments(list, p, positions[a], positions[b], edgeColor, mesh.EdgeWidth, itemIndex, MaxEdgePieces);
+        }
     }
 
     /// <summary>
@@ -309,8 +329,13 @@ public sealed class FramePreparer
     /// front of it or wholly behind, so the per piece order is right up to the length of a piece.
     /// </summary>
     void AddLine(DrawList list, in Projector p, LineItem line, int itemIndex)
+        => AddSegments(list, p, line.Start, line.End, line.Color.ToArgb(), line.Width, itemIndex, MaxLinePieces);
+
+    /// <summary>The segment from <paramref name="start"/> to <paramref name="end"/>, cut and split as a line.</summary>
+    void AddSegments(DrawList list, in Projector p, Vector3 start, Vector3 end, uint color, float width, int itemIndex,
+        int maxPieces)
     {
-        Vector3 start = line.Start, d = line.End - line.Start;
+        Vector3 d = end - start;
         float length2 = d.LengthSquared();
         if (length2 == 0)
             return;
@@ -351,8 +376,7 @@ public sealed class FramePreparer
         }
 
         int whole = spheres.Count + ellipsoids.Count > 0 ? (int)MathF.Ceiling(length / smallest) : LinePieces;
-        whole = Math.Clamp(whole, 1, MaxLinePieces);
-        uint color = line.Color.ToArgb();
+        whole = Math.Clamp(whole, 1, maxPieces);
         foreach ((float from, float to) in spans)
         {
             int pieces = Math.Max(1, (int)MathF.Ceiling(whole * (to - from)));
@@ -370,7 +394,7 @@ public sealed class FramePreparer
                     if (k > 0) { ax -= ox; ay -= oy; }
                     if (k < pieces - 1) { bx += ox; by += oy; }
                 }
-                AddSegment(list, ax, ay, bx, by, line.Width, color, itemIndex, false, (va.Z + vb.Z) / 2);
+                AddSegment(list, ax, ay, bx, by, width, color, itemIndex, false, (va.Z + vb.Z) / 2);
             }
         }
     }
