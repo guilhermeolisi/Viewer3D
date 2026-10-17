@@ -52,7 +52,7 @@ internal static class Fixtures
     }
 
     public static double Distance(CrystalCell cell, CrystalAtom p, CrystalAtom q, LatticeShift s)
-        => (cell.ToCartesian(q.X + s.A - p.X, q.Y + s.B - p.Y, q.Z + s.C - p.Z)).Length();
+        => cell.Basis().Distance(q.X + s.A - p.X, q.Y + s.B - p.Y, q.Z + s.C - p.Z);
 
     public static CrystalStructure Metal(string element, CrystalCell cell, params (double X, double Y, double Z)[] positions)
         => new(cell, [.. positions.Select(p => new CrystalAtom(element + "1", element, p.X, p.Y, p.Z) { SiteIndex = 0 })], []);
