@@ -1,4 +1,4 @@
-// Viewer3D sample: a spherical surface, a height field and a ball-and-stick scene.
+// Viewer3D sample: a spherical surface, a height field, a ball-and-stick scene and a crystal structure.
 // Usage: Viewer3D.Sample             opens the window
 //        Viewer3D.Sample --export DIR writes the README images to DIR
 using System.Numerics;
@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Themes.Fluent;
 using Viewer3D;
 using Viewer3D.Avalonia;
+using Viewer3D.Crystal;
 
 namespace Viewer3D.Sample;
 
@@ -26,6 +27,8 @@ internal static class Program
             Directory.CreateDirectory(dir);
             File.WriteAllBytes(Path.Combine(dir, "surface.png"), Scenes.Viewer(Scenes.Surface(90), Scenes.Surface(30)).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "atoms.png"), Scenes.Viewer(Scenes.Atoms(), null).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "crystal-ball-and-stick.png"), Scenes.Crystal(CrystalStyle.BallAndStick).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "crystal-space-filling.png"), Scenes.Crystal(CrystalStyle.SpaceFilling).RenderToPng(640, 480));
             Console.WriteLine($"Images written to {Path.GetFullPath(dir)}");
             return 0;
         }
@@ -65,6 +68,8 @@ internal sealed class SampleApp : Application
                                 new TabItem { Header = "Spherical surface", Content = Scenes.Viewer(Scenes.Surface(90), Scenes.Surface(30)) },
                                 new TabItem { Header = "Height field", Content = Scenes.Viewer(Scenes.HeightField(), null) },
                                 new TabItem { Header = "Balls and sticks", Content = Scenes.Viewer(Scenes.Atoms(), null) },
+                                new TabItem { Header = "Crystal", Content = Scenes.Crystal(CrystalStyle.BallAndStick) },
+                                new TabItem { Header = "Space filling", Content = Scenes.Crystal(CrystalStyle.SpaceFilling) },
                             },
                         },
                     },
@@ -161,5 +166,41 @@ internal static class Scenes
         for (int e = 0; e < edges.Length; e += 2)
             items.Add(new LineItem { Start = c[edges[e]], End = c[edges[e + 1]], Color = new Rgba(120, 120, 120), Width = 1.5f });
         return new Scene(items);
+    }
+
+    /// <summary>
+    /// Fluorite, CaF2 (Fm-3m, a = 5.463 angstrom), with every Ca-F bond (2.366 angstrom) and the Shannon ionic radii
+    /// of Ca2+ (VIII, 1.12) and F- (IV, 1.31).
+    /// </summary>
+    public static Viewer3DControl Crystal(CrystalStyle style)
+    {
+        const double a = 5.463;
+        var cell = new CrystalCell(a, a, a, 90, 90, 90);
+        var atoms = new List<CrystalAtom>();
+        foreach ((double x, double y, double z) in new[] { (0, 0, 0), (0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0.0) })
+            atoms.Add(new CrystalAtom("Ca1", "Ca", x, y, z) { SiteIndex = 0, Radius = 1.12 });
+        foreach (double x in new[] { 0.25, 0.75 })
+            foreach (double y in new[] { 0.25, 0.75 })
+                foreach (double z in new[] { 0.25, 0.75 })
+                    atoms.Add(new CrystalAtom("F1", "F", x, y, z) { SiteIndex = 1, Radius = 1.31 });
+        // The bonds of one Ca, as a program that looks around one atom per site gives them; the expansion adds the rest.
+        var bonds = new List<CrystalBond>();
+        for (int f = 4; f < atoms.Count; f++)
+            for (int i = -1; i <= 0; i++)
+                for (int j = -1; j <= 0; j++)
+                    for (int k = -1; k <= 0; k++)
+                    {
+                        Vector3 d = cell.ToCartesian(atoms[f].X + i, atoms[f].Y + j, atoms[f].Z + k);
+                        if (d.Length() < 2.5f)
+                            bonds.Add(new CrystalBond(0, f, new LatticeShift(i, j, k)));
+                    }
+        var structure = new CrystalStructure(cell, atoms, bonds);
+        structure = structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtoms(structure) };
+        CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions { Style = style, IncludeLabels = false });
+        var viewer = new Viewer3DControl { Scene = scene.Scene, AxisDirections = scene.Axes };
+        viewer.Camera!.LookAlong(-cell.AVector, cell.CVector);
+        viewer.Camera.Orbit(-35, -25);
+        viewer.Camera.Frame(scene.Scene);
+        return viewer;
     }
 }

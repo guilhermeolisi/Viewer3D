@@ -18,6 +18,7 @@ to test.
 |---|---|
 | `Viewer3D` | Scene, camera, frame preparation, picking, axis indicator, color maps and surface builders. No UI and no graphics library: only `System.Numerics`. |
 | `Viewer3D.Avalonia` | The `Viewer3DControl` for Avalonia 12, painted with SkiaSharp. |
+| `Viewer3D.Crystal` | Optional crystal layer: a crystal structure turned into a scene, in ball and stick or space filling. References only `Viewer3D`. |
 
 ## Quick start
 
@@ -63,7 +64,57 @@ the colors of the darker side.
 | Arrow keys, `+` and `-` | Rotate and zoom |
 
 The `Camera` raises `Changed` on every change, so two viewers that share one camera instance move together.
-`ItemHovered` reports what is under the pointer, with the triangle and barycentric weights for meshes.
+`ItemHovered` reports what is under the pointer, with the triangle and barycentric weights for meshes. `ItemClicked`
+reports what was clicked (or the background) on a left click that did not turn into a drag.
+
+A `SphereItem` with `Sectors` is painted as wedges from twelve o'clock, clockwise, each in its own color; what the
+fractions leave of the turn stays empty, with the outline of the disc.
+
+## Crystal layer
+
+`Viewer3D.Crystal` builds the scene of a crystal structure. The layer is optional: `Viewer3D.Avalonia` does not
+reference it.
+
+| Ball and stick | Space filling |
+|---|---|
+| ![Fluorite in ball and stick](docs/images/crystal-ball-and-stick.png) | ![Fluorite in space filling](docs/images/crystal-space-filling.png) |
+
+```csharp
+using Viewer3D.Crystal;
+
+var cell = new CrystalCell(5.463, 5.463, 5.463, 90, 90, 90);       // angstrom and degrees
+CrystalAtom[] atoms = [new("Ca1", "Ca", 0, 0, 0) { SiteIndex = 0 }, /* every position, one by one */];
+CrystalBond[] bonds = [new(0, 4, LatticeShift.Zero), /* second atom translated by the shift */];
+var structure = new CrystalStructure(cell, atoms, bonds);
+// Bonds given around one atom per site are extended to the other atoms of the site.
+structure = structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtoms(structure) };
+
+CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions
+{
+    Style = CrystalStyle.BallAndStick,          // or CrystalStyle.SpaceFilling
+    RepeatA = 2, RepeatB = 2, RepeatC = 1,      // 1 to 3 cells along each axis
+});
+viewer.Scene = scene.Scene;
+viewer.AxisDirections = scene.Axes;              // a, b and c, in the viewer's axis colors
+CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere or rod stands for
+```
+
+- **Model.** A `CrystalCell` (edges in angstrom, angles in degrees), the atoms at fractional coordinates, each
+  position listed (the layer does not apply symmetry), and the bonds as pairs of atom indices with a cell
+  translation. An atom can carry its own radius, the elements sharing its position (`Shares`) and its occupancy; a
+  shared or partly occupied position is painted in sectors.
+- **Frame.** a along x, b in the xy plane, c on the side of +z, in angstrom.
+- **Block.** Positions are reduced to the cell; `ShowBoundaryAtoms` adds the atoms on the far faces of the block,
+  and `CompleteCoordination` draws the bonded neighbors outside it as faded spheres. The cell edges are drawn once
+  each; the axes go to the axis indicator only. A block past 3000 spheres falls back to one cell, with a `Warning`.
+- **Styles.** Ball and stick draws each sphere at `BallScale` times the atom radius, with rods. Space filling has no
+  rods and multiplies every radius by s = min over the bonds of d / (r1 + r2), so the closest bonded pair touches
+  and no bonded pair overlaps; without bonds, s comes from the shortest distance in one cell.
+- **Elements.** `ElementTable` has color and radius for Z 1 to 118: the Jmol colors as published by
+  [pymatgen](https://github.com/materialsproject/pymatgen) (MIT), the metallic radius of pymatgen for metals and the
+  covalent radius of Cordero et al. (Dalton Trans., 2008, 2832) for the other elements. Values without a reference
+  (radii past Z 96, colors the Jmol scheme does not list) are estimates, marked `IsEstimated`.
+  `CrystalSceneOptions.ElementColors` overrides the colors.
 
 ## Theme colors
 
@@ -84,7 +135,7 @@ dotnet test Viewer3D.sln -c Release
 dotnet run --project samples/Viewer3D.Sample
 ```
 
-`samples/Viewer3D.Sample --export <dir>` writes the two images above.
+`samples/Viewer3D.Sample --export <dir>` writes the four images above.
 
 ## License
 

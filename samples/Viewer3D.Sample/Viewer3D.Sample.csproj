@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Viewer3D.Avalonia\Viewer3D.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\Viewer3D.Crystal\Viewer3D.Crystal.csproj" />
   </ItemGroup>
 
 </Project>
