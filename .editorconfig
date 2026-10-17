@@ -1,0 +1,17 @@
+root = true
+
+[*]
+end_of_line = crlf
+insert_final_newline = true
+charset = utf-8
+
+[*.{cs,csx}]
+indent_style = space
+indent_size = 4
+
+[*.{csproj,props,targets,axaml,xml,yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+[*.{yml,yaml}]
+end_of_line = lf

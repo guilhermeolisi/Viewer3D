@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <Version>0.1.0</Version>
+    <Authors>Guilherme Oliveira Siqueira</Authors>
+    <Copyright>Copyright (c) 2026 Guilherme Oliveira Siqueira</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/guilhermeolisi/Viewer3D</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/guilhermeolisi/Viewer3D</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>avalonia;3d;skia;skiasharp;viewer;surface;software-rendering</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Only the two libraries under src/ are packed; they turn this on. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>
