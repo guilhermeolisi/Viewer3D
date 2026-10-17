@@ -35,6 +35,37 @@ public class MeshEdgesTests
         }
     }
 
+    [Theory]
+    [InlineData(0f, 0f)]
+    [InlineData(0.6f, 0.3f)]
+    [InlineData(-0.5f, 0.7f)]
+    public void Prepare_EdgesOfAFace_ArePaintedAfterIt(float yaw, float pitch)
+    {
+        // De frente a aresta empata com a face; inclinada, a aresta do fundo fica atras do centroide da face.
+        var camera = new Camera { ViewRadius = 2 };
+        camera.Orbit(yaw / Camera.OrbitRadiansPerPixel, pitch / Camera.OrbitRadiansPerPixel);
+        var triangle = new MeshItem
+        {
+            Positions = [new(-1, -1, 0), new(1, -1, 0), new(0, 1, 0)],
+            Indices = [0, 1, 2],
+            Edges = [0, 1, 1, 2, 2, 0],
+            DoubleSided = true,
+        };
+
+        DrawList list = new FramePreparer().Prepare(new Scene([triangle]), camera, 200, 200);
+
+        ReadOnlySpan<uint> commands = list.Commands;
+        int lastTriangle = -1, firstSegment = int.MaxValue;
+        for (int c = 0; c < commands.Length; c++)
+        {
+            if (DrawList.KindOf(commands[c]) == DrawKind.Triangle) lastTriangle = c;
+            else if (DrawList.KindOf(commands[c]) == DrawKind.Segment) firstSegment = Math.Min(firstSegment, c);
+        }
+        Assert.Equal(1, list.TriangleCount);
+        Assert.True(list.SegmentCount >= 3);
+        Assert.True(lastTriangle < firstSegment, $"triangle at {lastTriangle}, segment at {firstSegment}");
+    }
+
     [Fact]
     public void Prepare_MeshWithoutEdges_HasNoSegments()
     {

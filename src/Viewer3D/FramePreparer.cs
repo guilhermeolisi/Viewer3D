@@ -64,6 +64,7 @@ public sealed class FramePreparer
     readonly List<SphereItem> spheres = [];
     readonly List<EllipsoidItem> ellipsoids = [];
     List<(float From, float To)> spans = [], spansScratch = [];
+    readonly Dictionary<long, float> faceDepthAtEdge = [];
 
     /// <summary>Whether labels are added to the list.</summary>
     public bool IncludeLabels { get; set; } = true;
@@ -100,7 +101,7 @@ public sealed class FramePreparer
             switch (items[i])
             {
                 case MeshItem mesh:
-                    AddMesh(list, p, mesh, i);
+                    AddMesh(list, p, mesh, i, bias);
                     break;
                 case SphereItem sphere:
                     AddSphere(list, p, sphere, i);
@@ -122,7 +123,14 @@ public sealed class FramePreparer
         Array.Sort(list.OrderDepth, list.Order, 0, list.CommandCount);
     }
 
-    void AddMesh(DrawList list, in Projector p, MeshItem mesh, int itemIndex)
+    /// <summary>
+    /// The drawn triangles of a mesh, then its <see cref="MeshItem.Edges"/>. An edge lies on the faces it borders, so its
+    /// own depth ties with theirs or falls behind the depth of a tilted face (taken at the face's centroid) and the face
+    /// would be painted over it. Each piece of an edge therefore takes at least the depth of the nearest drawn triangle
+    /// that has the edge as a side, a little in front: the edge comes after its faces and keeps its place among the
+    /// rest of the scene, as the faces do.
+    /// </summary>
+    void AddMesh(DrawList list, in Projector p, MeshItem mesh, int itemIndex, float bias)
     {
         Vector3[] positions = mesh.Positions;
         int n = positions.Length;
@@ -147,6 +155,8 @@ public sealed class FramePreparer
         Rgba fallback = mesh.Color;
         bool keyLight = mesh.Lighting == MeshLighting.KeyLight;
         int tc = list.TriangleCount, cc = list.CommandCount;
+        bool edged = mesh.Edges is { Length: >= 2 };
+        faceDepthAtEdge.Clear();
         float[] xy = list.TriXY;
         uint[] colors = list.TriColor;
         for (int t = 0; t < triangles; t++)
@@ -189,23 +199,42 @@ public sealed class FramePreparer
             list.TriItem[tc] = itemIndex;
             list.TriSource[tc] = t;
             list.Order[cc] = DrawList.Encode(DrawKind.Triangle, tc);
-            list.OrderDepth[cc] = (vz[a] + vz[b] + vz[c]) / 3;
+            float depth = (vz[a] + vz[b] + vz[c]) / 3;
+            list.OrderDepth[cc] = depth;
+            if (edged)
+            {
+                RaiseEdgeDepth(a, b, depth);
+                RaiseEdgeDepth(b, c, depth);
+                RaiseEdgeDepth(c, a, depth);
+            }
             tc++;
             cc++;
         }
         list.TriangleCount = tc;
         list.CommandCount = cc;
 
-        if (mesh.Edges is not { Length: >= 2 } edges)
+        if (!edged)
             return;
+        int[] edges = mesh.Edges!;
         Rgba shade = fallback.Shade(EdgeShade);
         uint edgeColor = (mesh.EdgeColor ?? new Rgba(shade.R, shade.G, shade.B)).ToArgb();
         for (int e = 0; e + 1 < edges.Length; e += 2)
         {
             int a = edges[e], b = edges[e + 1];
-            if ((uint)a < (uint)n && (uint)b < (uint)n)
-                AddSegments(list, p, positions[a], positions[b], edgeColor, mesh.EdgeWidth, itemIndex, MaxEdgePieces);
+            if ((uint)a >= (uint)n || (uint)b >= (uint)n)
+                continue;
+            float minDepth = faceDepthAtEdge.TryGetValue(EdgeKey(a, b), out float face) ? face + bias : float.NegativeInfinity;
+            AddSegments(list, p, positions[a], positions[b], edgeColor, mesh.EdgeWidth, itemIndex, MaxEdgePieces, minDepth);
         }
+    }
+
+    static long EdgeKey(int a, int b) => a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+
+    void RaiseEdgeDepth(int a, int b, float depth)
+    {
+        long key = EdgeKey(a, b);
+        if (!faceDepthAtEdge.TryGetValue(key, out float current) || depth > current)
+            faceDepthAtEdge[key] = depth;
     }
 
     /// <summary>
@@ -331,9 +360,12 @@ public sealed class FramePreparer
     void AddLine(DrawList list, in Projector p, LineItem line, int itemIndex)
         => AddSegments(list, p, line.Start, line.End, line.Color.ToArgb(), line.Width, itemIndex, MaxLinePieces);
 
-    /// <summary>The segment from <paramref name="start"/> to <paramref name="end"/>, cut and split as a line.</summary>
+    /// <summary>
+    /// The segment from <paramref name="start"/> to <paramref name="end"/>, cut and split as a line; no piece gets a depth
+    /// below <paramref name="minDepth"/>.
+    /// </summary>
     void AddSegments(DrawList list, in Projector p, Vector3 start, Vector3 end, uint color, float width, int itemIndex,
-        int maxPieces)
+        int maxPieces, float minDepth = float.NegativeInfinity)
     {
         Vector3 d = end - start;
         float length2 = d.LengthSquared();
@@ -394,7 +426,7 @@ public sealed class FramePreparer
                     if (k > 0) { ax -= ox; ay -= oy; }
                     if (k < pieces - 1) { bx += ox; by += oy; }
                 }
-                AddSegment(list, ax, ay, bx, by, width, color, itemIndex, false, (va.Z + vb.Z) / 2);
+                AddSegment(list, ax, ay, bx, by, width, color, itemIndex, false, MathF.Max((va.Z + vb.Z) / 2, minDepth));
             }
         }
     }
