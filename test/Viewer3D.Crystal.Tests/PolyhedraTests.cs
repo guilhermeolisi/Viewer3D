@@ -38,7 +38,7 @@ public class PolyhedraTests
         return sum / points.Length;
     }
 
-    /// <summary>Sal-gema NaCl, a = 5,64 A: Na na origem e os tres Cl vizinhos, cada um nos dois sentidos (Na-Cl = 2,82 A).</summary>
+    /// <summary>Rock salt NaCl, a = 5.64 A: Na at the origin and the three neighbor Cl, each both ways (Na-Cl = 2.82 A).</summary>
     static CrystalStructure RockSaltOctahedron(double centerX = 0)
     {
         CrystalAtom[] atoms =
@@ -74,7 +74,7 @@ public class PolyhedraTests
         Assert.Equal(4, scene.PolyhedronCount);
         foreach (MeshItem mesh in meshes)
         {
-            // Seis quadrados, dois triangulos cada; a diagonal de cada quadrado nao e aresta.
+            // Six squares, two triangles each; the diagonal of each square is not an edge.
             Assert.Equal(12, mesh.TriangleCount);
             Assert.Equal(12, EdgeCount(mesh));
             Assert.Equal(8, mesh.Positions.Length);
@@ -114,7 +114,7 @@ public class PolyhedraTests
     [Fact]
     public void Build_CenterOnTheCellEdge_DrawsTheWholePolyhedron()
     {
-        // So o cubo do Ca da origem: ele e as sete imagens dos outros cantos da celula, cada uma com o cubo inteiro.
+        // Only the cube of the Ca at the origin: it and the seven images at the other cell corners, each with the whole cube.
         CrystalStructure s = Fixtures.FluoriteWithCubes();
         s = s with { Polyhedra = [s.Polyhedra[0]] };
         CrystalScene scene = Builder.Build(s, Options() with { ShowBoundaryAtoms = true, CompleteCoordination = true });
@@ -131,13 +131,13 @@ public class PolyhedraTests
                 if (scene.Lookup(at.Id)!.IsCompletion)
                     faded++;
             }
-        // O canto (1, 1, 1) tem sete dos oito vertices fora da celula.
+        // The corner (1, 1, 1) has seven of its eight vertices outside the cell.
         Assert.True(faded >= 7, $"{faded} faded vertices");
     }
 
     /// <summary>
-    /// Com a fronteira, todo F da celula e vertice de um cubo desenhado (o de (3/4, 3/4, 3/4) e do Ca do canto (1, 1, 1)).
-    /// Os Ca desenhados sao 4 da celula, 7 cantos, e 1 face a mais para cada Ca de face: 14.
+    /// With the far faces, every F of the cell is a vertex of a drawn cube (the one at (3/4, 3/4, 3/4) of the Ca at the
+    /// corner (1, 1, 1)). The drawn Ca are 4 in the cell, 7 corners and one more face image for each face Ca: 14.
     /// </summary>
     static CrystalSceneOptions WithBoundary() => Options() with { ShowBoundaryAtoms = true };
 
@@ -161,7 +161,7 @@ public class PolyhedraTests
     [Fact]
     public void Build_HideInsideBonds_DropsCenterToVertexRods()
     {
-        // Todas as ligacoes da fluorita sao Ca-F, de dentro dos cubos: ligada a opcao, elas existem.
+        // Every fluorite bond is Ca-F, inside the cubes: with the option on, they are there.
         CrystalScene on = Builder.Build(Fixtures.FluoriteWithCubes(), WithBoundary());
         CrystalScene off = Builder.Build(Fixtures.FluoriteWithCubes(), WithBoundary() with { ShowBondsInsidePolyhedra = false });
 
@@ -222,7 +222,7 @@ public class PolyhedraTests
     {
         CrystalScene scene = Builder.Build(Fixtures.FluoriteWithCubes(), Options() with { PolyhedronOpacity = 0.5 });
 
-        // round(255 x 0,5) = 128; a cor e a do Ca (centro), com a luz das esferas.
+        // round(255 x 0.5) = 128; the color is the Ca's (the center), lit like the spheres.
         Assert.All(Polyhedra(scene), m =>
         {
             Assert.Equal(128, m.Color.A);
@@ -246,8 +246,8 @@ public class PolyhedraTests
     [Fact]
     public void Build_RepeatPastTheCeiling_CountsPolyhedra()
     {
-        // 50 centros, cada um com um tetraedro de imagens do atomo 0: 3 x 3 x 3 da 1350 esferas, abaixo do teto, mas
-        // 1350 poliedros contam 8 cada.
+        // 50 centers, each with a tetrahedron of images of atom 0: 3 x 3 x 3 gives 1350 spheres, below the ceiling, but
+        // 1350 polyhedra count 8 each.
         var atoms = new List<CrystalAtom>();
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 5; j++)
@@ -277,7 +277,7 @@ public class PolyhedraTests
     [Fact]
     public void Lookup_Polyhedron_ReportsCenterAndIndex()
     {
-        // Centro dado em x = 1: a imagem desenhada esta uma celula atras do dado.
+        // Center given at x = 1: the drawn image is one cell behind the given one.
         CrystalScene scene = Builder.Build(RockSaltOctahedron(centerX: 1), Options());
 
         MeshItem mesh = Assert.Single(Polyhedra(scene));

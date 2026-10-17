@@ -25,7 +25,7 @@ public class MeshEdgesTests
     {
         DrawList list = new FramePreparer().Prepare(new Scene([Square(SquareEdges)]), Camera, 200, 200);
 
-        // Pega a aresta de todo triangulo: a diagonal 0-2 seria um segmento inclinado.
+        // Catches an edge on every triangle side: the diagonal 0-2 would be a slanted segment.
         Assert.True(list.SegmentCount >= 4);
         ReadOnlySpan<float> seg = list.Segments;
         for (int i = 0; i < list.SegmentCount; i++)
@@ -41,7 +41,7 @@ public class MeshEdgesTests
     [InlineData(-0.5f, 0.7f)]
     public void Prepare_EdgesOfAFace_ArePaintedAfterIt(float yaw, float pitch)
     {
-        // De frente a aresta empata com a face; inclinada, a aresta do fundo fica atras do centroide da face.
+        // Face on, the edge ties with the face; tilted, the far edge lies behind the face's centroid.
         var camera = new Camera { ViewRadius = 2 };
         camera.Orbit(yaw / Camera.OrbitRadiansPerPixel, pitch / Camera.OrbitRadiansPerPixel);
         var triangle = new MeshItem
@@ -78,7 +78,7 @@ public class MeshEdgesTests
     [Fact]
     public void Prepare_EdgeThroughSphere_IsCutInsideIt()
     {
-        // A esfera no meio da aresta de baixo (y = -1): disco de 15 px em torno de (100, 150).
+        // The sphere at the middle of the bottom edge (y = -1): a disc of 15 px around (100, 150).
         var sphere = new SphereItem { Center = new Vector3(0, -1, 0), Radius = 0.3f };
         DrawList list = new FramePreparer().Prepare(new Scene([Square([0, 1]), sphere]), Camera, 200, 200);
 
@@ -86,7 +86,7 @@ public class MeshEdgesTests
         Assert.True(list.SegmentCount >= 2, "the edge is drawn on both sides of the sphere");
         for (int i = 0; i < list.SegmentCount; i++)
         {
-            // Meio pixel de folga: as pecas se sobrepoem 0,5 px para nao deixar ponto claro na emenda.
+            // Half a pixel of slack: the pieces overlap 0.5 px so the seam shows no light dot.
             float mid = (seg[5 * i] + seg[5 * i + 2]) / 2;
             Assert.True(mid < 85.5f || mid > 114.5f, $"segment {i} centered at x = {mid}, inside the sphere");
         }
@@ -106,7 +106,7 @@ public class MeshEdgesTests
     [Fact]
     public void Prepare_EdgePieces_AreCapped()
     {
-        // Uma esfera minuscula longe da aresta faria 2 / 0,01 = 200 pedacos; o teto da aresta e 8.
+        // A tiny sphere away from the edge would make 2 / 0.01 = 200 pieces; the edge cap is 8.
         var tiny = new SphereItem { Center = new Vector3(0, 1.8f, 0), Radius = 0.01f };
         DrawList list = new FramePreparer().Prepare(new Scene([Square([0, 1]), tiny]), Camera, 200, 200);
 
@@ -131,7 +131,7 @@ public class MeshEdgesTests
         DrawList single = new FramePreparer().Prepare(new Scene([solid]), camera, 200, 200);
         DrawList both = new FramePreparer().Prepare(new Scene([doubleSided]), camera, 200, 200);
 
-        // Visto de quina, tres faces de frente (6 triangulos); com dupla face, as tres do fundo tambem.
+        // Seen from a corner, three front faces (6 triangles); double-sided, the three back ones too.
         Assert.Equal(6, single.TriangleCount);
         Assert.Equal(12, both.TriangleCount);
         foreach (uint color in both.TriangleColors)

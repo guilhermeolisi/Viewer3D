@@ -46,7 +46,7 @@ public class Viewer3DControlTranslucentMeshTests
         using SKBitmap a = TestWindows.Decode(translucent.RenderToPng(100, 100));
         using SKBitmap b = TestWindows.Decode(opaque.RenderToPng(100, 100));
 
-        // Alfa 110 de 255: ~43% de azul sobre ~57% do vermelho da esfera; opaca, so azul.
+        // Alpha 110 of 255: ~43% blue over ~57% of the sphere's red; opaque, blue only.
         SKColor mixed = a.GetPixel(50, 50), blue = b.GetPixel(50, 50);
         Assert.True(mixed.Red > 80 && mixed.Blue > 60, $"translucent {mixed}");
         Assert.True(blue.Red < 60 && blue.Blue > 150, $"opaque {blue}");
@@ -71,7 +71,7 @@ public class Viewer3DControlTranslucentMeshTests
         using SKBitmap pa = TestWindows.Decode(a.RenderToPng(100, 100));
         using SKBitmap pb = TestWindows.Decode(b.RenderToPng(100, 100));
 
-        // As faces do fundo somam mais uma camada de vermelho em todo o interior do cubo.
+        // The back faces add one more layer of red all over the inside of the cube.
         int deeper = 0;
         for (int y = 40; y <= 60; y++)
             for (int x = 40; x <= 60; x++)
@@ -87,7 +87,7 @@ public class Viewer3DControlTranslucentMeshTests
 
         using SKBitmap png = TestWindows.Decode(control.RenderToPng(100, 100));
 
-        // Lados em x = 10 e x = 90, y = 10 e y = 90; a diagonal de (10, 90) a (90, 10) nao e aresta.
+        // Sides at x = 10 and x = 90, y = 10 and y = 90; the diagonal from (10, 90) to (90, 10) is not an edge.
         Assert.True(IsDark(png.GetPixel(10, 50)), $"left side {png.GetPixel(10, 50)}");
         Assert.True(IsDark(png.GetPixel(50, 90)), $"bottom side {png.GetPixel(50, 90)}");
         Assert.False(IsDark(png.GetPixel(50, 50)), $"diagonal {png.GetPixel(50, 50)}");
@@ -125,7 +125,7 @@ public class Viewer3DControlTranslucentMeshTests
 
         Assert.Equal(2, clicks.Count);
         Assert.Equal(5, clicks[0].Pick?.ItemId);
-        // No meio, o atomo opaco visto atraves da face e o escolhido.
+        // In the middle, the opaque atom seen through the face is the one picked.
         Assert.Equal(1, clicks[1].Pick?.ItemId);
     }
 
@@ -134,7 +134,7 @@ public class Viewer3DControlTranslucentMeshTests
     {
         var (_, window, clicks) = Shown(Square(0, new Rgba(30, 30, 220, 110), [0, 1, 1, 2, 2, 3, 3, 0], id: 5));
 
-        // Logo fora do lado direito (x = 230): so a aresta, com a sua tolerancia, esta sob o ponteiro.
+        // Just outside the right side (x = 230): only the edge, with its tolerance, is under the pointer.
         Click(window, new Point(232, 100));
         Click(window, new Point(240, 100));
 

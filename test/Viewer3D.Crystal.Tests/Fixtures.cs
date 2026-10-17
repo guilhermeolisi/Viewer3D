@@ -154,8 +154,8 @@ internal static class Fixtures
     }
 
     /// <summary>
-    /// Coordenacao 8 em bipiramide hexagonal (12 faces triangulares, 18 arestas), numa celula cubica de 10 A: Zr no
-    /// centro, seis O no equador e dois nos polos, todos a 2 A.
+    /// Coordination 8 as a hexagonal bipyramid (12 triangular faces, 18 edges) in a cubic cell of 10 A: Zr at the
+    /// center, six O on the equator and two at the poles, all at 2 A.
     /// </summary>
     public static CrystalStructure HexagonalBipyramid()
     {

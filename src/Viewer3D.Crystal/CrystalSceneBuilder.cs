@@ -191,8 +191,8 @@ public sealed class CrystalSceneBuilder
                         }
             }
 
-            // Poliedros: uma instancia por imagem desenhada do centro. Sem os vertices, a imagem que e vertice e nao e
-            // centro sai com rotulo e bastoes; sem os bastoes internos, sai o bastao centro-vertice de cada instancia.
+            // Polyhedra: one copy per drawn image of the center. Without the vertices, an image that is a vertex and not a
+            // center is left out with its label and rods; without the inner bonds, each copy's center-vertex rod is.
             List<PolyhedronInstance> instances = polyhedra ? Instances(own, boundary) : [];
             var hidden = new HashSet<(int, LatticeShift)>();
             var inside = new HashSet<((int, LatticeShift), (int, LatticeShift))>();
@@ -266,7 +266,7 @@ public sealed class CrystalSceneBuilder
             foreach ((int atom, LatticeShift t) in boundary)
                 AddSphere(atom, t, false);
 
-            // Vertice fora do bloco, de qualquer instancia (de centro proprio ou da fronteira): esfera esmaecida.
+            // A vertex outside the block, of any copy (around a block center or a far-face one): a faded sphere.
             var completions = new HashSet<(int, LatticeShift)>();
             if (options.CompleteCoordination && options.ShowPolyhedronVertices)
             {

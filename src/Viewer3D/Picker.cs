@@ -60,8 +60,9 @@ public static class Picker
 
     /// <summary>
     /// The front-most item under (<paramref name="x"/>, <paramref name="y"/>), or null. A translucent triangle (alpha below
-    /// 255) gives way to an opaque item seen through it, so the atom inside a translucent polyhedron can still be picked;
-    /// the translucent mesh is reported only when nothing opaque is behind it at that point.
+    /// 255) gives way to an opaque item seen through it while that item is still inside the mesh, so the atom inside a
+    /// translucent polyhedron can still be picked; once a back-facing triangle or an edge of the same mesh is reached,
+    /// whatever lies further behind is outside the mesh and the mesh itself is reported.
     /// </summary>
     public static PickResult? Pick(DrawList list, float x, float y)
     {
@@ -70,6 +71,7 @@ public static class Picker
             return null;
         ReadOnlySpan<uint> commands = list.Commands;
         PickResult? translucent = null;
+        int translucentItem = -1;
         for (int c = commands.Length - 1; c >= 0; c--)
         {
             int i = DrawList.IndexOf(commands[c]);
@@ -78,10 +80,16 @@ public static class Picker
                 case DrawKind.Triangle:
                     if (HitTriangle(list.TriXY, 6 * i, x, y, out Vector3 w))
                     {
+                        if (list.TriItem[i] == translucentItem && FacesAway(list.TriXY, 6 * i))
+                            return translucent;
                         var hit = new PickResult(list.Scene.Items[list.TriItem[i]], list.TriSource[i], w);
                         if (list.TriColor[3 * i] >> 24 == 255)
                             return hit;
-                        translucent ??= hit;
+                        if (translucent is null)
+                        {
+                            translucent = hit;
+                            translucentItem = list.TriItem[i];
+                        }
                     }
                     break;
                 case DrawKind.Circle:
@@ -91,7 +99,8 @@ public static class Picker
                     break;
                 case DrawKind.Segment:
                     if (HitSegment(list.SegData, 5 * i, x, y))
-                        return new PickResult(list.Scene.Items[list.SegItem[i]], -1, default);
+                        return list.SegItem[i] == translucentItem ? translucent
+                            : new PickResult(list.Scene.Items[list.SegItem[i]], -1, default);
                     break;
                 case DrawKind.Ellipse:
                     if (HitEllipse(list.EllipseData, DrawList.EllipseStride * i, x, y))
@@ -101,6 +110,13 @@ public static class Picker
         }
         return translucent;
     }
+
+    /// <summary>
+    /// The triangle is seen from its back: clockwise on screen (positive area, as <see cref="FramePreparer"/> keeps the
+    /// winding of the back side of a double-sided mesh).
+    /// </summary>
+    static bool FacesAway(float[] xy, int o)
+        => (xy[o + 2] - xy[o]) * (xy[o + 5] - xy[o + 1]) - (xy[o + 3] - xy[o + 1]) * (xy[o + 4] - xy[o]) > 0;
 
     static bool HitTriangle(float[] xy, int o, float x, float y, out Vector3 weights)
     {
