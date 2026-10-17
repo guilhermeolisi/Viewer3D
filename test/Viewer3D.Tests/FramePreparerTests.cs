@@ -1,0 +1,197 @@
+using System.Numerics;
+
+namespace Viewer3D.Tests;
+
+public class FramePreparerTests
+{
+    static MeshItem Triangle(float z, Rgba color, int id = 0, bool reversed = false, bool doubleSided = false)
+    {
+        Vector3[] p = [new(-1, -1, z), new(1, -1, z), new(0, 1, z)];
+        return new MeshItem
+        {
+            Id = id,
+            Positions = p,
+            Indices = reversed ? [0, 2, 1] : [0, 1, 2],
+            Color = color,
+            DoubleSided = doubleSided,
+        };
+    }
+
+    static DrawList Prepare(params SceneItem[] items) => new FramePreparer().Prepare(new Scene(items), new Camera { ViewRadius = 2 }, 200, 200);
+
+    [Fact]
+    public void Prepare_KeepsTrianglesFacingTheViewer()
+    {
+        DrawList list = Prepare(Triangle(0, Rgba.White));
+
+        Assert.Equal(1, list.TriangleCount);
+    }
+
+    [Fact]
+    public void Prepare_DropsBackFaces()
+    {
+        DrawList list = Prepare(Triangle(0, Rgba.White, reversed: true));
+
+        Assert.Equal(0, list.TriangleCount);
+    }
+
+    [Fact]
+    public void Prepare_KeepsBackFacesOfDoubleSidedMeshes()
+    {
+        DrawList list = Prepare(Triangle(0, Rgba.White, reversed: true, doubleSided: true));
+
+        Assert.Equal(1, list.TriangleCount);
+    }
+
+    [Fact]
+    public void Prepare_FaceTowardsTheViewerIsFullyLit_TiltedFaceIsDarker()
+    {
+        // Face tilted 60 degrees: light = ambient + (1 - ambient) cos 60.
+        var tilted = new MeshItem
+        {
+            Positions = [new(0, 0, 0), new(1, 0, 0), new(0, 0.5f, -MathF.Sqrt(3) / 2)],
+            Indices = [0, 1, 2],
+            Color = Rgba.White,
+        };
+
+        DrawList facing = Prepare(Triangle(0, Rgba.White));
+        DrawList away = Prepare(tilted);
+
+        Assert.Equal(Rgba.White.ToArgb(), facing.TriangleColors[0]);
+        float expected = FramePreparer.Ambient + (1 - FramePreparer.Ambient) * 0.5f;
+        Assert.Equal((byte)(255 * expected + 0.5f), Rgba.FromArgb(away.TriangleColors[0]).R);
+    }
+
+    [Fact]
+    public void Prepare_UsesVertexColorsBeforeFaceColors()
+    {
+        var mesh = new MeshItem
+        {
+            Positions = [new(-1, -1, 0), new(1, -1, 0), new(0, 1, 0)],
+            Indices = [0, 1, 2],
+            VertexColors = [new(255, 0, 0), new(0, 255, 0), new(0, 0, 255)],
+            FaceColors = [Rgba.Black],
+        };
+
+        DrawList list = Prepare(mesh);
+
+        Assert.Equal(new Rgba(255, 0, 0).ToArgb(), list.TriangleColors[0]);
+        Assert.Equal(new Rgba(0, 255, 0).ToArgb(), list.TriangleColors[1]);
+        Assert.Equal(new Rgba(0, 0, 255).ToArgb(), list.TriangleColors[2]);
+    }
+
+    [Fact]
+    public void Prepare_OrdersOverlappingTrianglesFromBackToFront()
+    {
+        // The near triangle is given first; it must still be painted last.
+        DrawList list = Prepare(Triangle(0.5f, Rgba.White, id: 1), Triangle(-0.5f, Rgba.Black, id: 2));
+
+        Assert.Equal(2, list.CommandCount);
+        Assert.Equal(1, list.TriangleItems[DrawList.IndexOf(list.Commands[0])]);
+        Assert.Equal(0, list.TriangleItems[DrawList.IndexOf(list.Commands[1])]);
+    }
+
+    [Fact]
+    public void Prepare_OrdersOverlappingSpheresFromBackToFront()
+    {
+        var near = new SphereItem { Center = new Vector3(0, 0, 1), Radius = 0.5f };
+        var far = new SphereItem { Center = new Vector3(0, 0, -1), Radius = 0.5f };
+
+        DrawList list = Prepare(near, far);
+
+        Assert.Equal(DrawKind.Circle, DrawList.KindOf(list.Commands[0]));
+        Assert.Equal(1, list.CircleItems[DrawList.IndexOf(list.Commands[0])]);
+        Assert.Equal(0, list.CircleItems[DrawList.IndexOf(list.Commands[1])]);
+    }
+
+    [Fact]
+    public void Prepare_SphereRadiusIsScaledToPixels()
+    {
+        // 200 px for a view radius of 2: 50 px per unit.
+        DrawList list = Prepare(new SphereItem { Center = Vector3.Zero, Radius = 0.5f });
+
+        Assert.Equal(100f, list.Circles[0], 3);
+        Assert.Equal(100f, list.Circles[1], 3);
+        Assert.Equal(25f, list.Circles[2], 3);
+    }
+
+    [Fact]
+    public void Prepare_RodIsCutAtTheSpheresAndSplitInTwoHalves()
+    {
+        var rod = new RodItem
+        {
+            Start = new Vector3(-1, 0, 0),
+            End = new Vector3(1, 0, 0),
+            Radius = 0.1f,
+            StartTrim = 0.5f,
+            EndTrim = 0.5f,
+            StartColor = new Rgba(255, 0, 0),
+            EndColor = new Rgba(0, 0, 255),
+        };
+
+        DrawList list = Prepare(rod);
+
+        // 50 px per unit: the visible part runs from x = -0.5 (75 px) to 0.5 (125 px), split at 0 (100 px).
+        Assert.Equal(2, list.SegmentCount);
+        ReadOnlySpan<float> s = list.Segments;
+        Assert.Equal(75f, s[0], 3);
+        Assert.Equal(100f, s[2], 3);
+        Assert.Equal(100f, s[5], 3);
+        Assert.Equal(125f, s[7], 3);
+        Assert.Equal(10f, s[4], 3);
+        Assert.Equal(new Rgba(255, 0, 0).ToArgb(), list.SegmentColors[0]);
+        Assert.Equal(new Rgba(0, 0, 255).ToArgb(), list.SegmentColors[1]);
+        Assert.True(list.SegmentIsRod[0]);
+    }
+
+    [Fact]
+    public void Prepare_RodHiddenInsideItsSpheresIsNotDrawn()
+    {
+        var rod = new RodItem { Start = new Vector3(-0.4f, 0, 0), End = new Vector3(0.4f, 0, 0), StartTrim = 0.5f, EndTrim = 0.5f };
+
+        Assert.Equal(0, Prepare(rod).SegmentCount);
+    }
+
+    [Fact]
+    public void Prepare_RodIsPaintedBeforeTheSphereAtItsEnd()
+    {
+        var sphere = new SphereItem { Center = new Vector3(0, 0, 1), Radius = 0.3f };
+        var rod = new RodItem { Start = new Vector3(0, 0, 1), End = new Vector3(1, 0, 1), StartTrim = 0.3f };
+
+        DrawList list = Prepare(sphere, rod);
+
+        uint lastCommand = list.Commands[^1];
+        Assert.Equal(DrawKind.Circle, DrawList.KindOf(lastCommand));
+    }
+
+    [Fact]
+    public void Prepare_LabelsAreKeptApartAndCanBeLeftOut()
+    {
+        var label = new LabelItem { Position = Vector3.Zero, Text = "a", Offset = new Vector2(3, -4) };
+
+        DrawList with = Prepare(label);
+        DrawList without = new FramePreparer { IncludeLabels = false }.Prepare(new Scene([label]), new Camera { ViewRadius = 2 }, 200, 200);
+
+        Assert.Equal(1, with.LabelCount);
+        Assert.Equal(0, with.CommandCount);
+        Assert.Equal(103f, with.Labels[0], 3);
+        Assert.Equal(96f, with.Labels[1], 3);
+        Assert.Equal("a", with.LabelTexts[0]);
+        Assert.Null(with.LabelColorAt(0));
+        Assert.Equal(0, without.LabelCount);
+    }
+
+    [Fact]
+    public void Prepare_ReusesTheListBetweenFrames()
+    {
+        var preparer = new FramePreparer();
+        var list = new DrawList();
+        var camera = new Camera { ViewRadius = 2 };
+
+        preparer.Prepare(new Scene([Triangle(0, Rgba.White), Triangle(0.5f, Rgba.White)]), camera, 200, 200, list);
+        preparer.Prepare(new Scene([Triangle(0, Rgba.White)]), camera, 200, 200, list);
+
+        Assert.Equal(1, list.TriangleCount);
+        Assert.Equal(1, list.CommandCount);
+    }
+}

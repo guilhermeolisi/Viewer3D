@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Viewer3D.Avalonia</RootNamespace>
+    <Description>Software 3D viewer control for Avalonia, drawn with SkiaSharp: orbit, zoom and pan, a fixed axis indicator, picking and off-screen PNG export. Works the same with GPU or software rendering and in Avalonia.Headless.</Description>
+    <IsPackable>true</IsPackable>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!-- Literal versions, the same the host app uses: Avalonia 12.1.x and the SkiaSharp that Avalonia.Skia asks for. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.4" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viewer3D\Viewer3D.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Viewer3D.Avalonia.Tests" />
+  </ItemGroup>
+
+</Project>

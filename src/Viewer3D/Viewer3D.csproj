@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Viewer3D</RootNamespace>
+    <Description>Scene, camera and frame preparation for a software 3D viewer: meshes, spheres, rods, lines and labels turned into a sorted 2D draw list, with spherical-surface and height-field builders. No UI and no graphics library dependency.</Description>
+    <IsPackable>true</IsPackable>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Viewer3D.Tests" />
+  </ItemGroup>
+
+</Project>
