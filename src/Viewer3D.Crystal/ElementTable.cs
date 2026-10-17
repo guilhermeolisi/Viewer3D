@@ -14,7 +14,7 @@ public sealed record ElementInfo(int Z, string Symbol, Rgba Color, double Radius
 /// <summary>
 /// Colors and radii of the elements Z 1 to 118, read from <c>Data/elements.csv</c>, whose header cites the sources:
 /// the Jmol colors as published by pymatgen (MIT License), the metallic radii of pymatgen for metals, and the covalent
-/// radii of Cordero et al. (2008) for the other elements. Elements past Z 96 have estimated radii, and those the Jmol
+/// radii of Cordero et al. (2008) for the other elements. Elements past Z 96 without a metallic radius have estimated radii, and those the Jmol
 /// scheme does not list have a neutral gray; both are marked <see cref="ElementInfo.IsEstimated"/>.
 /// </summary>
 public static class ElementTable

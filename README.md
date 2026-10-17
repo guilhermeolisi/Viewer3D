@@ -113,7 +113,7 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
 - **Elements.** `ElementTable` has color and radius for Z 1 to 118: the Jmol colors as published by
   [pymatgen](https://github.com/materialsproject/pymatgen) (MIT), the metallic radius of pymatgen for metals and the
   covalent radius of Cordero et al. (Dalton Trans., 2008, 2832) for the other elements. Values without a reference
-  (radii past Z 96, colors the Jmol scheme does not list) are estimates, marked `IsEstimated`.
+  (covalent radii past Z 96, colors the Jmol scheme does not list) are estimates, marked `IsEstimated`.
   `CrystalSceneOptions.ElementColors` overrides the colors.
 
 ## Theme colors
