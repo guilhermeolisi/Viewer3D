@@ -120,4 +120,14 @@ public class CrystalAppearanceTests
         Assert.False(first.ShowEdges);
         Assert.Equal(Blue, second.FaceColor);
     }
+
+    [Fact]
+    public void ElementKey_IsTheNormalizedElementWithTheLargestShare()
+    {
+        var plain = new CrystalAtom("Fe1", "fe", 0, 0, 0);
+        var shared = new CrystalAtom("M1", "Mg", 0, 0, 0) { Shares = [new ElementShare("Mg", 0.3), new ElementShare("FE", 0.7)] };
+
+        Assert.Equal("Fe", CrystalAppearance.ElementKey(plain));
+        Assert.Equal("Fe", CrystalAppearance.ElementKey(shared));
+    }
 }

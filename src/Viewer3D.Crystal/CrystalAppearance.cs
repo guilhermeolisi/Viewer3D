@@ -225,6 +225,16 @@ public sealed record CrystalAppearance
     public ImmutableDictionary<int, PolyhedronStyle> ByPolyhedron { get; init; } = ImmutableDictionary<int, PolyhedronStyle>.Empty;
 
     /// <summary>
+    /// The key of <paramref name="atom"/> in <see cref="ByElement"/> and of a polyhedron around it in
+    /// <see cref="PolyhedronByElement"/>: the element with the largest share of the position, normalized.
+    /// </summary>
+    public static string ElementKey(CrystalAtom atom)
+    {
+        ArgumentNullException.ThrowIfNull(atom);
+        return ElementTable.Normalize(CrystalSceneBuilder.MainElement(atom));
+    }
+
+    /// <summary>
     /// The style of atom <paramref name="atom"/>, of its image at <paramref name="offset"/> when given, from the rules
     /// in order.
     /// </summary>
