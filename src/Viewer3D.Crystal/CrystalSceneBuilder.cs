@@ -51,10 +51,23 @@ public sealed class CrystalSceneBuilder
 
     static readonly Rgba UnknownColor = new(128, 128, 128);
     static readonly Rgba FadeTarget = new(200, 200, 200);
+    static readonly Rgba OccupancyLow = new(40, 80, 220);
+    static readonly Rgba OccupancyHigh = new(220, 40, 40);
     const byte FadedAlpha = 110;
 
     /// <summary>Builds the scene of <paramref name="structure"/>.</summary>
-    public CrystalScene Build(CrystalStructure structure, CrystalSceneOptions options)
+    public CrystalScene Build(CrystalStructure structure, CrystalSceneOptions options) => Build(structure, options, null);
+
+    /// <summary>
+    /// Builds the scene of <paramref name="structure"/> with <paramref name="appearance"/>; null is
+    /// <see cref="CrystalAppearance.Default"/>, the scene of the style alone.
+    /// </summary>
+    /// <remarks>
+    /// The polyhedra are found before any atom is hidden, so hiding a center or a vertex leaves the polyhedron whole. A
+    /// hidden atom takes its label and rods with it, and is counted in <see cref="CrystalScene.HiddenAtomCount"/> when it
+    /// is an image of the block or of its far faces. In the thermal styles the radius scale is ignored.
+    /// </remarks>
+    public CrystalScene Build(CrystalStructure structure, CrystalSceneOptions options, CrystalAppearance? appearance)
     {
         ArgumentNullException.ThrowIfNull(structure);
         ArgumentNullException.ThrowIfNull(options);
@@ -65,7 +78,7 @@ public sealed class CrystalSceneBuilder
 
         var n = new LatticeShift(Math.Clamp(options.RepeatA, 1, 3), Math.Clamp(options.RepeatB, 1, 3),
             Math.Clamp(options.RepeatC, 1, 3));
-        var context = new Context(structure, options, basis);
+        var context = new Context(structure, options, basis, appearance ?? CrystalAppearance.Default);
         CrystalScene scene = context.Build(n, null);
         int cost = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
         if (cost > CrystalSceneOptions.MaxAtoms && n != new LatticeShift(1, 1, 1))
@@ -134,26 +147,50 @@ public sealed class CrystalSceneBuilder
         readonly bool thermal;
         readonly bool polyhedra;
         readonly double scale;
+        readonly CrystalAppearance app;
+        readonly AtomStyle[] atomStyle;
+        readonly Rgba?[] elementRuleColor;
+        readonly PolyhedronStyle[] polyhedronStyle;
 
-        public Context(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis)
+        public Context(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis, CrystalAppearance app)
         {
             this.structure = structure;
             this.options = options;
             this.basis = basis;
+            this.app = app;
             IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
             reduced = new Reduced[atoms.Count];
             radius = new double[atoms.Count];
             color = new Rgba[atoms.Count];
             sectors = new IReadOnlyList<SphereSector>?[atoms.Count];
+            atomStyle = new AtomStyle[atoms.Count];
+            elementRuleColor = new Rgba?[atoms.Count];
+            Dictionary<int, int> siteOrder = SiteOrder(atoms);
             for (int i = 0; i < atoms.Count; i++)
             {
                 CrystalAtom atom = atoms[i];
                 reduced[i] = Reduce(atom.X, atom.Y, atom.Z);
                 string main = MainElement(atom);
                 radius[i] = CrystalPacking.RadiusOf(atom);
-                color[i] = ColorOf(main);
-                sectors[i] = SectorsOf(atom);
+                atomStyle[i] = app.ResolveAtom(structure, i);
+                elementRuleColor[i] = app.ByElement.TryGetValue(ElementTable.Normalize(main), out AtomStyle? e) ? e.Color : null;
+                switch (app.ColorScheme)
+                {
+                    case AtomColorScheme.Site:
+                        color[i] = SitePalette.Color(siteOrder[i]);
+                        break;
+                    case AtomColorScheme.Occupancy:
+                        color[i] = OccupancyColor(atom.Occupancy);
+                        break;
+                    default:
+                        color[i] = ColorOf(main);
+                        sectors[i] = SectorsOf(atom);
+                        break;
+                }
             }
+            polyhedronStyle = new PolyhedronStyle[structure.Polyhedra.Count];
+            for (int k = 0; k < polyhedronStyle.Length; k++)
+                polyhedronStyle[k] = app.ResolvePolyhedron(structure, k);
             thermal = options.Style is CrystalStyle.ThermalEllipsoids or CrystalStyle.PolyhedraWithEllipsoids;
             polyhedra = options.Style is CrystalStyle.Polyhedra or CrystalStyle.PolyhedraWithEllipsoids;
             shapes = new DisplacementShape[]?[atoms.Count];
@@ -184,17 +221,45 @@ public sealed class CrystalSceneBuilder
             for (int k = 0; k < list.Count; k++)
             {
                 AtomDisplacement d = list[k];
-                Rgba c = list.Count > 1 && d.Element is string element ? ColorOf(element) : color[index];
+                Rgba c = list.Count > 1 && d.Element is string element && app.ColorScheme == AtomColorScheme.Element
+                    ? ColorOf(element)
+                    : color[index];
                 result[k] = DisplacementShape.From(d.Cartesian6, scale, options.MarkerSize, c, d.Element);
             }
             return result;
         }
 
+        /// <summary>The style of image <paramref name="t"/> of the atom (a block image, not an offset).</summary>
+        AtomStyle Style(int atom, LatticeShift t)
+            => app.ByImage.Count == 0 ? atomStyle[atom] : app.ResolveAtom(structure, atom, t - reduced[atom].Floor);
+
+        /// <summary>
+        /// The color a rule gives the atom over its scheme color; null when none does, or when the color is the one of
+        /// the element rule in the element scheme, which already took it with the sectors.
+        /// </summary>
+        Rgba? OverrideColor(int atom, AtomStyle style)
+        {
+            if (style.Color is not { } c)
+                return null;
+            if (app.ColorScheme == AtomColorScheme.Element && elementRuleColor[atom] == c)
+                return null;
+            return c;
+        }
+
+        static Rgba WithOpacity(Rgba c, double? opacity)
+            => opacity is { } o && double.IsFinite(o) ? c with { A = (byte)Math.Round(c.A * Math.Clamp(o, 0, 1)) } : c;
+
+        /// <summary>The color of the image, without fading: the rule color or the scheme color, with the rule opacity.</summary>
+        Rgba AtomColor(int atom, AtomStyle style) => WithOpacity(OverrideColor(atom, style) ?? color[atom], style.Opacity);
+
+        double RadiusScale(AtomStyle style)
+            => !thermal && style.RadiusScale is { } f && double.IsFinite(f) && f > 0 ? f : 1;
+
         /// <summary>Where a bond from the atom along <paramref name="direction"/> leaves its shapes.</summary>
-        float Reach(int atom, Vector3 direction)
+        float Reach(int atom, LatticeShift t, Vector3 direction)
         {
             if (!thermal)
-                return (float)(scale * radius[atom]);
+                return (float)(scale * radius[atom] * RadiusScale(Style(atom, t)));
             float reach = 0;
             foreach (DisplacementShape shape in shapes[atom]!)
                 reach = MathF.Max(reach, shape.Reach(direction));
@@ -236,9 +301,30 @@ public sealed class CrystalSceneBuilder
             List<PolyhedronInstance> instances = polyhedra ? Instances(own, boundary) : [];
             var hidden = new HashSet<(int, LatticeShift)>();
             var inside = new HashSet<((int, LatticeShift), (int, LatticeShift))>();
+            var centers = new HashSet<(int, LatticeShift)>(instances.Select(p => (p.Center, p.Image)));
+
+            // Aparencia: a imagem escondida sai com rotulo e bastoes, e o poliedro em volta dela ou que passa por ela
+            // fica, porque os poliedros ja foram montados acima. Vale nos quatro lugares onde uma imagem entra.
+            bool IsHidden(int atom, LatticeShift t)
+                => !app.ShowAtoms || Style(atom, t).Visible == false
+                    || (!app.ShowPolyhedronCenters && centers.Contains((atom, t)));
+            var shownAtoms = new HashSet<int>(centers.Select(c => c.Item1));
+            int hiddenCount = 0;
+            foreach ((int atom, LatticeShift t) in own.Concat(boundary))
+            {
+                if (IsHidden(atom, t))
+                    hiddenCount++;
+                else
+                    shownAtoms.Add(atom);
+            }
+            if (hiddenCount > 0)
+            {
+                own.RemoveAll(x => IsHidden(x.Atom, x.Image));
+                boundary.RemoveAll(x => IsHidden(x.Atom, x.Image));
+            }
+
             if (instances.Count > 0)
             {
-                var centers = new HashSet<(int, LatticeShift)>(instances.Select(p => (p.Center, p.Image)));
                 foreach (PolyhedronInstance p in instances)
                 {
                     foreach ((int, LatticeShift) vertex in p.Vertices)
@@ -257,30 +343,40 @@ public sealed class CrystalSceneBuilder
             {
                 Vector3 p = Position(atom, t);
                 drawn[(atom, t)] = p;
-                IReadOnlyList<SphereSector>? s = sectors[atom];
-                if (faded && s is not null)
-                    s = [.. s.Select(x => x with { Color = Fade(x.Color) })];
+                AtomStyle style = Style(atom, t);
+                Rgba? rule = OverrideColor(atom, style);
+                IReadOnlyList<SphereSector>? s = rule is null ? sectors[atom] : null;
+                if (s is not null && (faded || style.Opacity is not null))
+                    s = [.. s.Select(x => x with { Color = Look(x.Color, faded, style.Opacity) })];
                 if (thermal)
                 {
-                    AddShapes(atom, t, p, faded, s);
+                    AddShapes(atom, t, p, faded, s, rule, style.Opacity);
                     return;
                 }
                 int id = nextId++;
-                Rgba baseColor = faded ? Fade(color[atom]) : color[atom];
-                items.Add(new SphereItem { Id = id, Center = p, Radius = (float)(scale * radius[atom]), Color = baseColor, Sectors = s });
+                Rgba baseColor = Look(rule ?? color[atom], faded, style.Opacity);
+                items.Add(new SphereItem
+                {
+                    Id = id,
+                    Center = p,
+                    Radius = (float)(scale * radius[atom] * RadiusScale(style)),
+                    Color = baseColor,
+                    Sectors = s,
+                });
                 lookup[id] = new CrystalItemInfo(CrystalItemKind.Atom, atom, -1, t - reduced[atom].Floor, faded);
             }
 
             // Thermal style: one item per displacement of the atom, all pointing to the same atom in the selection. The
             // occupancy sectors apply only with a single displacement; with several, each one already has its element color.
-            void AddShapes(int atom, LatticeShift t, Vector3 p, bool faded, IReadOnlyList<SphereSector>? s)
+            // A rule color and opacity apply to every shape.
+            void AddShapes(int atom, LatticeShift t, Vector3 p, bool faded, IReadOnlyList<SphereSector>? s, Rgba? rule, double? opacity)
             {
                 DisplacementShape[] list = shapes[atom]!;
                 IReadOnlyList<SphereSector>? shapeSectors = list.Length == 1 ? s : null;
                 foreach (DisplacementShape shape in list)
                 {
                     int id = nextId++;
-                    Rgba c = faded ? Fade(shape.Color) : shape.Color;
+                    Rgba c = Look(rule ?? shape.Color, faded, opacity);
                     SceneItem item = shape.Kind switch
                     {
                         DisplacementShapeKind.Ellipsoid => new EllipsoidItem
@@ -314,7 +410,7 @@ public sealed class CrystalSceneBuilder
                 {
                     foreach ((int atom, LatticeShift u) in p.Vertices)
                     {
-                        if (!drawn.ContainsKey((atom, u)) && completions.Add((atom, u)))
+                        if (!drawn.ContainsKey((atom, u)) && !IsHidden(atom, u) && completions.Add((atom, u)))
                             AddSphere(atom, u, true);
                     }
                 }
@@ -336,7 +432,7 @@ public sealed class CrystalSceneBuilder
                 foreach ((int bond, int other, LatticeShift shift) in list)
                 {
                     LatticeShift u = t + shift;
-                    if (hidden.Contains((other, u)))
+                    if (hidden.Contains((other, u)) || IsHidden(other, u))
                         continue;
                     bool partnerDrawn = drawn.ContainsKey((other, u));
                     if (!partnerDrawn)
@@ -356,26 +452,34 @@ public sealed class CrystalSceneBuilder
                     AddSphere(atom, t, true);
             }
 
-            if (options.Style is not CrystalStyle.SpaceFilling)
+            if (options.Style is not CrystalStyle.SpaceFilling && app.ShowBonds)
             {
                 float rodRadius = (float)(thermal ? 0.4 * options.BondRadius : options.BondRadius);
                 foreach ((int bond, int first, LatticeShift ft, int second, LatticeShift st) in rods)
                 {
                     if (inside.Count > 0 && inside.Contains(Order((first, ft), (second, st))))
                         continue;
-                    bool faded = completions.Contains((first, ft)) || completions.Contains((second, st));
+                    BondStyle bondStyle = app.BondDefault == BondStyle.Empty && app.ByElementPair.Count == 0 && app.ByBond.Count == 0
+                        ? BondStyle.Empty
+                        : app.ResolveBond(structure, bond);
+                    if (bondStyle.Visible == false)
+                        continue;
+                    bool firstFaded = completions.Contains((first, ft)), secondFaded = completions.Contains((second, st));
+                    bool faded = firstFaded || secondFaded;
                     int id = nextId++;
                     Vector3 start = drawn[(first, ft)], end = drawn[(second, st)];
+                    Rgba startColor = bondStyle.Color ?? (OverrideColor(first, Style(first, ft)) ?? color[first]);
+                    Rgba endColor = bondStyle.Color ?? (OverrideColor(second, Style(second, st)) ?? color[second]);
                     items.Add(new RodItem
                     {
                         Id = id,
                         Start = start,
                         End = end,
-                        Radius = rodRadius,
-                        StartColor = completions.Contains((first, ft)) ? Fade(color[first]) : color[first],
-                        EndColor = completions.Contains((second, st)) ? Fade(color[second]) : color[second],
-                        StartTrim = Reach(first, end - start),
-                        EndTrim = Reach(second, start - end),
+                        Radius = bondStyle.Radius is { } r && double.IsFinite(r) && r > 0 ? (float)r : rodRadius,
+                        StartColor = Look(startColor, firstFaded, bondStyle.Opacity),
+                        EndColor = Look(endColor, secondFaded, bondStyle.Opacity),
+                        StartTrim = Reach(first, ft, end - start),
+                        EndTrim = Reach(second, st, start - end),
                     });
                     lookup[id] = new CrystalItemInfo(CrystalItemKind.Bond, first, bond, ft - reduced[first].Floor, faded);
                 }
@@ -391,17 +495,23 @@ public sealed class CrystalSceneBuilder
                 };
             }
 
-            AddCellEdges(items, n);
+            if (app.ShowCell)
+                AddCellEdges(items, n);
 
             if (options.IncludeLabels)
             {
                 foreach ((int atom, LatticeShift t) in own)
                 {
+                    AtomStyle style = Style(atom, t);
+                    if (style.ShowLabel == false)
+                        continue;
                     items.Add(new LabelItem
                     {
                         Position = drawn[(atom, t)],
-                        Text = atoms[atom].Label,
+                        Text = LabelOf(atom, style.LabelText ?? AtomLabelText.Label),
                         Offset = new Vector2(4, -6),
+                        // 12 e o tamanho padrao do LabelItem.
+                        Size = app.LabelSize is { } size && double.IsFinite(size) && size > 0 ? (float)size : 12f,
                     });
                 }
             }
@@ -412,8 +522,83 @@ public sealed class CrystalSceneBuilder
                 new(structure.Cell.BVector, "b"),
                 new(structure.Cell.CVector, "c"),
             };
-            return new CrystalScene(new Scene(items), structure.Cell, axes, scale, Legend(), drawn.Count, warning, lookup,
-                instances.Count);
+            List<ElementLegendEntry> legend = Legend(hiddenCount == 0 ? null : shownAtoms);
+            return new CrystalScene(new Scene(items), structure.Cell, axes, scale, legend, drawn.Count, warning, lookup,
+                instances.Count)
+            {
+                HiddenAtomCount = hiddenCount,
+                ColorLegend = ColorLegend(legend, hiddenCount == 0 ? null : shownAtoms),
+            };
+        }
+
+        string LabelOf(int atom, AtomLabelText text)
+        {
+            IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+            CrystalAtom a = atoms[atom];
+            switch (text)
+            {
+                case AtomLabelText.Element:
+                    return Symbol(MainElement(a));
+                case AtomLabelText.Site when a.SiteIndex >= 0:
+                    foreach (CrystalAtom other in atoms)
+                    {
+                        if (other.SiteIndex == a.SiteIndex)
+                            return other.Label;
+                    }
+                    return a.Label;
+                default:
+                    return a.Label;
+            }
+        }
+
+        /// <summary>Order of each atom's site among the sites, by first appearance; an atom without site is a site of its label.</summary>
+        static Dictionary<int, int> SiteOrder(IReadOnlyList<CrystalAtom> atoms)
+        {
+            var keys = new Dictionary<string, int>(StringComparer.Ordinal);
+            var result = new Dictionary<int, int>();
+            for (int i = 0; i < atoms.Count; i++)
+            {
+                string key = SiteKey(atoms[i]);
+                if (!keys.TryGetValue(key, out int order))
+                    keys[key] = order = keys.Count;
+                result[i] = order;
+            }
+            return result;
+        }
+
+        static string SiteKey(CrystalAtom atom)
+            => atom.SiteIndex >= 0 ? "#" + atom.SiteIndex.ToString(System.Globalization.CultureInfo.InvariantCulture) : "@" + atom.Label;
+
+        static Rgba OccupancyColor(double occupancy)
+            => Rgba.Lerp(OccupancyLow, OccupancyHigh, (float)(double.IsFinite(occupancy) ? Math.Clamp(occupancy, 0, 1) : 1));
+
+        /// <summary>
+        /// What the colors of the atoms mean: the element legend in the element scheme, one entry per drawn site in the
+        /// site scheme (the label of its first atom), and three stops in the occupancy scheme.
+        /// </summary>
+        List<ColorLegendEntry> ColorLegend(List<ElementLegendEntry> legend, HashSet<int>? shown)
+        {
+            switch (app.ColorScheme)
+            {
+                case AtomColorScheme.Site:
+                    {
+                        var result = new List<ColorLegendEntry>();
+                        var seen = new HashSet<string>(StringComparer.Ordinal);
+                        IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+                        for (int i = 0; i < atoms.Count; i++)
+                        {
+                            if (shown is not null && !shown.Contains(i))
+                                continue;
+                            if (seen.Add(SiteKey(atoms[i])))
+                                result.Add(new ColorLegendEntry(atoms[i].Label, color[i]));
+                        }
+                        return result;
+                    }
+                case AtomColorScheme.Occupancy:
+                    return [new("0", OccupancyColor(0)), new("0.5", OccupancyColor(0.5)), new("1", OccupancyColor(1))];
+                default:
+                    return [.. legend.Select(e => new ColorLegendEntry(e.Element, e.Color))];
+            }
         }
 
         /// <summary>One drawn copy of a polyhedron: around the image <see cref="Image"/> of its center.</summary>
@@ -440,6 +625,8 @@ public sealed class CrystalSceneBuilder
             {
                 CrystalPolyhedron p = list[k];
                 if (options.EnabledPolyhedra is { } enabled && !enabled.Contains(k))
+                    continue;
+                if (polyhedronStyle[k].Visible == false)
                     continue;
                 if (!IsValid(p) || !images.TryGetValue(p.Center, out List<LatticeShift>? centerImages))
                     continue;
@@ -512,15 +699,20 @@ public sealed class CrystalSceneBuilder
                     }
                 }
             }
-            double opacity = double.IsFinite(options.PolyhedronOpacity) ? Math.Clamp(options.PolyhedronOpacity, 0, 1) : 0.35;
-            Rgba faceColor = (polyhedron.Color ?? color[instance.Center]) with { A = (byte)Math.Round(255 * opacity) };
+            PolyhedronStyle style = polyhedronStyle[instance.Index];
+            double asked = style.FaceOpacity ?? options.PolyhedronOpacity;
+            double opacity = double.IsFinite(asked) ? Math.Clamp(asked, 0, 1) : 0.35;
+            Rgba faceColor = (style.FaceColor ?? polyhedron.Color ?? color[instance.Center]) with { A = (byte)Math.Round(255 * opacity) };
             return new MeshItem
             {
                 Id = id,
                 Positions = positions,
-                Indices = [.. indices],
-                Edges = [.. edges],
+                Indices = style.ShowFaces == false ? [] : [.. indices],
+                Edges = style.ShowEdges == false ? null : [.. edges],
                 Color = faceColor,
+                EdgeColor = style.EdgeColor,
+                // 1,5 e a largura padrao do MeshItem.
+                EdgeWidth = style.EdgeWidth is { } w && float.IsFinite(w) && w > 0 ? w : 1.5f,
                 Lighting = MeshLighting.KeyLight,
                 DoubleSided = options.PolyhedronBackFaces,
             };
@@ -614,11 +806,16 @@ public sealed class CrystalSceneBuilder
                     }
         }
 
-        List<ElementLegendEntry> Legend()
+        /// <summary>The elements of the atoms in <paramref name="shown"/>; all atoms when null.</summary>
+        List<ElementLegendEntry> Legend(HashSet<int>? shown)
         {
             var symbols = new HashSet<string>(StringComparer.Ordinal);
-            foreach (CrystalAtom atom in structure.Atoms)
+            IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+            for (int i = 0; i < atoms.Count; i++)
             {
+                if (shown is not null && !shown.Contains(i))
+                    continue;
+                CrystalAtom atom = atoms[i];
                 if (atom.Shares is { Count: > 0 } shares)
                 {
                     foreach (ElementShare share in shares)
@@ -641,8 +838,17 @@ public sealed class CrystalSceneBuilder
             return ElementTable.TryGet(normalized, out _) ? normalized : element;
         }
 
+        /// <summary>
+        /// The color of an element: the color of its appearance rule, then <see cref="CrystalSceneOptions.ElementColors"/>,
+        /// then the element table. Legend, sectors, rods and faces all take it from here.
+        /// </summary>
         Rgba ColorOf(string element)
         {
+            if (app.ByElement.Count > 0 && app.ByElement.TryGetValue(ElementTable.Normalize(element), out AtomStyle? rule)
+                && rule.Color is { } ruled)
+            {
+                return ruled;
+            }
             IReadOnlyDictionary<string, Rgba>? custom = options.ElementColors;
             if (custom is not null)
             {
@@ -664,5 +870,8 @@ public sealed class CrystalSceneBuilder
         }
 
         static Rgba Fade(Rgba c) => Rgba.Lerp(c, FadeTarget, 0.5f) with { A = FadedAlpha };
+
+        /// <summary>The color faded when the image completes a coordination, then with the rule opacity.</summary>
+        static Rgba Look(Rgba c, bool faded, double? opacity) => WithOpacity(faded ? Fade(c) : c, opacity);
     }
 }

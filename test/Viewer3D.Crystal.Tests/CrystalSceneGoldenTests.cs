@@ -9,7 +9,7 @@ public class CrystalSceneGoldenTests
     static readonly CrystalSceneBuilder Builder = new();
 
     // Gravados do builder do master (Viewer3D 3422692), antes da E172.
-    static readonly Dictionary<string, string> Recorded = new()
+    internal static readonly Dictionary<string, string> Recorded = new()
     {
         ["Fluorite BallAndStick"] = "48245D627C649EA3",
         ["Fluorite SpaceFilling"] = "726F0F8B9B2A1F19",

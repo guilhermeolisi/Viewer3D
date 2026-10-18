@@ -125,6 +125,9 @@ public sealed record CrystalSceneOptions
 /// <param name="Color">Color the scene uses for it.</param>
 public sealed record ElementLegendEntry(string Element, Rgba Color);
 
+/// <summary>One entry of <see cref="CrystalScene.ColorLegend"/>: a text and its color.</summary>
+public sealed record ColorLegendEntry(string Text, Rgba Color);
+
 /// <summary>What a pickable item of a <see cref="CrystalScene"/> stands for.</summary>
 public enum CrystalItemKind
 {
@@ -204,6 +207,15 @@ public sealed class CrystalScene
 
     /// <summary>Why the scene is not what was asked (repetition past the ceiling, invalid cell); null when it is.</summary>
     public string? Warning { get; }
+
+    /// <summary>Images of the block and of its far faces that the appearance hid.</summary>
+    public int HiddenAtomCount { get; init; }
+
+    /// <summary>
+    /// What the atom colors mean in the color scheme of the appearance: the elements, the sites, or stops of the
+    /// occupancy scale.
+    /// </summary>
+    public IReadOnlyList<ColorLegendEntry> ColorLegend { get; init; } = [];
 
     /// <summary>What the item with this <see cref="SceneItem.Id"/> stands for; null for an edge, a label or an unknown id.</summary>
     public CrystalItemInfo? Lookup(int itemId) => lookup.TryGetValue(itemId, out CrystalItemInfo? info) ? info : null;
