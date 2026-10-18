@@ -25,6 +25,9 @@
   drawn image of their centers, with options for the opacity, the vertex atoms, the rods inside, the back faces and
   which polyhedra are drawn. `CrystalItemKind.Polyhedron` and `CrystalItemInfo.PolyhedronIndex` report a click on one.
 - `Viewer3D.Sample`: `--bench-polyhedra N` times a frame of N translucent octahedra.
+- `Viewer3D.Crystal`: `CrystalPacking.Measure` gives the packing fraction of a structure with the same radii the
+  space filling style draws (`PackingMeasure`: the scale at which the nearest spheres touch, the sphere and cell
+  volumes, and the fraction); `CellBasis.Volume` gives the cell volume.
 
 ## 0.1.0 - 10/17/2026
 
