@@ -27,13 +27,23 @@ public sealed class ItemHoveredEventArgs(PickResult? pick, Point position) : Eve
 /// <summary>Arguments of <see cref="Viewer3DControl.ItemClicked"/>.</summary>
 /// <param name="pick">What was clicked, or null when the click fell on the background.</param>
 /// <param name="position">Pointer position in the control.</param>
-public sealed class ItemClickedEventArgs(PickResult? pick, Point position) : EventArgs
+/// <param name="modifiers">Keys held during the click, so the owner can add to a selection with Ctrl.</param>
+public sealed class ItemClickedEventArgs(PickResult? pick, Point position, KeyModifiers modifiers) : EventArgs
 {
+    /// <summary>A click without modifier keys.</summary>
+    public ItemClickedEventArgs(PickResult? pick, Point position)
+        : this(pick, position, KeyModifiers.None)
+    {
+    }
+
     /// <summary>What was clicked, or null when the click fell on the background.</summary>
     public PickResult? Pick { get; } = pick;
 
     /// <summary>Pointer position in the control.</summary>
     public Point Position { get; } = position;
+
+    /// <summary>Keys held during the click. The control never changes the selection: its owner decides.</summary>
+    public KeyModifiers Modifiers { get; } = modifiers;
 }
 
 /// <summary>
@@ -41,7 +51,7 @@ public sealed class ItemClickedEventArgs(PickResult? pick, Point position) : Eve
 /// move, wheel to zoom at the pointer, double click to frame the scene, arrows to rotate and + or - to zoom.
 /// While a gesture lasts the control paints <see cref="LowDetailScene"/>, when given, and goes back to
 /// <see cref="Scene"/> when it ends. Colors come from the resources <c>Viewer3DBackgroundColor</c>,
-/// <c>Viewer3DLabelColor</c> and <c>Viewer3DAxisColor0</c> to <c>Viewer3DAxisColor2</c> (a Color or a solid brush),
+/// <c>Viewer3DLabelColor</c>, <c>Viewer3DSelectionColor</c> and <c>Viewer3DAxisColor0</c> to <c>Viewer3DAxisColor2</c> (a Color or a solid brush),
 /// with built-in light and dark defaults.
 /// </summary>
 public class Viewer3DControl : Control
@@ -64,6 +74,18 @@ public class Viewer3DControl : Control
     /// <summary>Defines <see cref="SelectedItemId"/>.</summary>
     public static readonly StyledProperty<int?> SelectedItemIdProperty =
         AvaloniaProperty.Register<Viewer3DControl, int?>(nameof(SelectedItemId));
+
+    /// <summary>Defines <see cref="SelectedItemIds"/>.</summary>
+    public static readonly StyledProperty<IReadOnlyCollection<int>?> SelectedItemIdsProperty =
+        AvaloniaProperty.Register<Viewer3DControl, IReadOnlyCollection<int>?>(nameof(SelectedItemIds));
+
+    /// <summary>Defines <see cref="SceneBackground"/>.</summary>
+    public static readonly StyledProperty<Rgba?> SceneBackgroundProperty =
+        AvaloniaProperty.Register<Viewer3DControl, Rgba?>(nameof(SceneBackground));
+
+    /// <summary>Defines <see cref="OutlineWidth"/>.</summary>
+    public static readonly StyledProperty<double?> OutlineWidthProperty =
+        AvaloniaProperty.Register<Viewer3DControl, double?>(nameof(OutlineWidth));
 
     /// <summary>Defines <see cref="AxisDirections"/>.</summary>
     public static readonly StyledProperty<IReadOnlyList<AxisDirection>?> AxisDirectionsProperty =
@@ -103,6 +125,7 @@ public class Viewer3DControl : Control
     static Viewer3DControl()
     {
         AffectsRender<Viewer3DControl>(SceneProperty, LowDetailSceneProperty, SelectedItemIdProperty,
+            SelectedItemIdsProperty, SceneBackgroundProperty, OutlineWidthProperty,
             AxisDirectionsProperty, ShowAxisIndicatorProperty, ShowLabelsProperty);
         FocusableProperty.OverrideDefaultValue<Viewer3DControl>(true);
         ClipToBoundsProperty.OverrideDefaultValue<Viewer3DControl>(true);
@@ -151,6 +174,39 @@ public class Viewer3DControl : Control
         get => GetValue(SelectedItemIdProperty);
         set => SetValue(SelectedItemIdProperty, value);
     }
+
+    /// <summary>
+    /// More items drawn with the selection ring, together with <see cref="SelectedItemId"/>. The ring takes the color
+    /// of the resource <c>Viewer3DSelectionColor</c>, or the label color without it.
+    /// </summary>
+    public IReadOnlyCollection<int>? SelectedItemIds
+    {
+        get => GetValue(SelectedItemIdsProperty);
+        set => SetValue(SelectedItemIdsProperty, value);
+    }
+
+    /// <summary>
+    /// The background, over the resource <c>Viewer3DBackgroundColor</c>; null keeps the theme one. An alpha of 0 gives a
+    /// transparent PNG.
+    /// </summary>
+    public Rgba? SceneBackground
+    {
+        get => GetValue(SceneBackgroundProperty);
+        set => SetValue(SceneBackgroundProperty, value);
+    }
+
+    /// <summary>
+    /// Outline of spheres and ellipses in pixels: null keeps the default (none on spheres, 1 pixel on ellipses), 0 takes
+    /// it off, and above 0 draws it in a darker shade of the color.
+    /// </summary>
+    public double? OutlineWidth
+    {
+        get => GetValue(OutlineWidthProperty);
+        set => SetValue(OutlineWidthProperty, value);
+    }
+
+    /// <summary>What is under the pointer since its last move over the control; null over the background.</summary>
+    public PickResult? HoveredPick => lastHover;
 
     /// <summary>Directions shown by the axis indicator in the lower left corner.</summary>
     public IReadOnlyList<AxisDirection>? AxisDirections
@@ -307,13 +363,25 @@ public class Viewer3DControl : Control
     PaintOptions CreateOptions(Camera camera)
     {
         bool dark = ActualThemeVariant == ThemeVariant.Dark;
-        SKColor background = FindColor("Viewer3DBackgroundColor") ?? (dark ? new SKColor(0xFF1E1E1E) : SKColors.White);
+        SKColor background = SceneBackground is { } own
+            ? new SKColor(own.R, own.G, own.B, own.A)
+            : FindColor("Viewer3DBackgroundColor") ?? (dark ? new SKColor(0xFF1E1E1E) : SKColors.White);
         SKColor label = FindColor("Viewer3DLabelColor") ?? (dark ? new SKColor(0xFFE6E6E6) : new SKColor(0xFF202020));
+        SKColor selection = FindColor("Viewer3DSelectionColor") ?? label;
         SKColor[] defaults = dark ? DarkAxes : LightAxes;
         var axes = new SKColor[defaults.Length];
         for (int i = 0; i < axes.Length; i++)
             axes[i] = FindColor($"Viewer3DAxisColor{i}") ?? defaults[i];
-        return new PaintOptions(background, label, axes, AxisDirections, camera.Orientation, ShowAxisIndicator, ShowLabels, SelectedItemId);
+        HashSet<int>? selected = null;
+        if (SelectedItemId is not null || SelectedItemIds is { Count: > 0 })
+        {
+            selected = SelectedItemIds is { } many ? [.. many] : [];
+            if (SelectedItemId is int id)
+                selected.Add(id);
+        }
+        float? outline = OutlineWidth is { } w && double.IsFinite(w) ? (float)Math.Max(w, 0) : null;
+        return new PaintOptions(background, label, axes, AxisDirections, camera.Orientation, ShowAxisIndicator, ShowLabels,
+            selected, selection, outline);
     }
 
     SKColor? FindColor(string key)
@@ -384,7 +452,7 @@ public class Viewer3DControl : Control
         if (clicking && e.InitialPressMouseButton == MouseButton.Left && Point.Distance(p, pressed) <= ClickTolerance)
         {
             PickResult? pick = current is null ? null : Picker.Pick(current, (float)p.X, (float)p.Y);
-            ItemClicked?.Invoke(this, new ItemClickedEventArgs(pick, p));
+            ItemClicked?.Invoke(this, new ItemClickedEventArgs(pick, p, e.KeyModifiers));
         }
         clicking = false;
         // Before releasing the capture, whose loss would end the gesture a second time.

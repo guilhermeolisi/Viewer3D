@@ -12,7 +12,9 @@ internal sealed record PaintOptions(
     Quaternion Orientation,
     bool ShowAxisIndicator,
     bool ShowLabels,
-    int? SelectedItemId);
+    IReadOnlySet<int>? Selected,
+    SKColor Selection,
+    float? OutlineWidth);
 
 /// <summary>
 /// Paints a <see cref="DrawList"/> on a Skia canvas. The same code paints the screen and <c>RenderToPng</c>, so what
@@ -58,21 +60,22 @@ internal static class SkiaPainter
             int i = DrawList.IndexOf(commands[c]);
             if (kind == DrawKind.Circle)
             {
-                bool selected = IsSelected(scene, list.CircleItems[i], options.SelectedItemId);
+                bool selected = IsSelected(scene, list.CircleItems[i], options.Selected);
                 var sphere = scene?.Items[list.CircleItems[i]] as SphereItem;
                 PaintCircle(canvas, list, i, sphere?.Sectors, sphere?.Dashed == true, fill, stroke,
-                    selected ? options.Label : (SKColor?)null);
+                    selected ? options.Selection : (SKColor?)null, options.OutlineWidth);
             }
             else if (kind == DrawKind.Ellipse)
             {
-                bool selected = IsSelected(scene, list.EllipseItems[i], options.SelectedItemId);
+                bool selected = IsSelected(scene, list.EllipseItems[i], options.Selected);
                 var sectors = (scene?.Items[list.EllipseItems[i]] as EllipsoidItem)?.Sectors;
-                PaintEllipse(canvas, list, i, sectors, fill, stroke, selected ? options.Label : (SKColor?)null);
+                PaintEllipse(canvas, list, i, sectors, fill, stroke, selected ? options.Selection : (SKColor?)null,
+                    options.OutlineWidth);
             }
             else
             {
-                bool selected = IsSelected(scene, list.SegmentItems[i], options.SelectedItemId);
-                PaintSegment(canvas, list, i, stroke, selected ? options.Label : (SKColor?)null);
+                bool selected = IsSelected(scene, list.SegmentItems[i], options.Selected);
+                PaintSegment(canvas, list, i, stroke, selected ? options.Selection : (SKColor?)null);
             }
             c++;
         }
@@ -84,8 +87,8 @@ internal static class SkiaPainter
         canvas.Restore();
     }
 
-    static bool IsSelected(Scene? scene, int itemIndex, int? selectedId)
-        => selectedId is int id && scene is not null && scene.Items[itemIndex].Id == id;
+    static bool IsSelected(Scene? scene, int itemIndex, IReadOnlySet<int>? selected)
+        => selected is { Count: > 0 } && scene is not null && selected.Contains(scene.Items[itemIndex].Id);
 
     static void PaintTriangles(SKCanvas canvas, DrawList list, ReadOnlySpan<uint> commands, SKPaint paint)
     {
@@ -109,7 +112,7 @@ internal static class SkiaPainter
     }
 
     static void PaintCircle(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, bool dashed,
-        SKPaint fill, SKPaint stroke, SKColor? outline)
+        SKPaint fill, SKPaint stroke, SKColor? outline, float? outlineWidth)
     {
         ReadOnlySpan<float> data = list.Circles;
         float x = data[3 * i], y = data[3 * i + 1], r = data[3 * i + 2];
@@ -129,6 +132,13 @@ internal static class SkiaPainter
         else
         {
             PaintDisc(canvas, x, y, r, baseColor, sectors, fill, stroke, 1f);
+            if (outlineWidth is > 0f)
+            {
+                stroke.Color = new SKColor(baseColor.Shade(0.45f).ToArgb());
+                stroke.StrokeWidth = outlineWidth.Value;
+                stroke.StrokeCap = SKStrokeCap.Butt;
+                canvas.DrawCircle(x, y, r, stroke);
+            }
         }
         if (outline is SKColor o)
         {
@@ -163,7 +173,7 @@ internal static class SkiaPainter
     /// halves of the three principal ellipses, all lines with a width in pixels.
     /// </summary>
     static void PaintEllipse(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, SKPaint fill,
-        SKPaint stroke, SKColor? outline)
+        SKPaint stroke, SKColor? outline, float? outlineWidth)
     {
         ReadOnlySpan<float> d = list.Ellipses.Slice(DrawList.EllipseStride * i, DrawList.EllipseStride);
         float cx = d[0], cy = d[1];
@@ -183,8 +193,12 @@ internal static class SkiaPainter
         shape.Transform(matrix);
         stroke.StrokeCap = SKStrokeCap.Butt;
         stroke.Color = new SKColor(baseColor.Shade(0.45f).ToArgb());
-        stroke.StrokeWidth = 1f;
-        canvas.DrawPath(shape, stroke);
+        float width = outlineWidth ?? 1f;
+        if (width > 0f)
+        {
+            stroke.StrokeWidth = width;
+            canvas.DrawPath(shape, stroke);
+        }
 
         if (list.EllipseHasArcs[i])
         {

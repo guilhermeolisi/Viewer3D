@@ -30,7 +30,7 @@ public enum CrystalStyle
     PolyhedraWithEllipsoids,
 }
 
-/// <summary>Options of <see cref="CrystalSceneBuilder.Build"/>.</summary>
+/// <summary>Options of <see cref="CrystalSceneBuilder.Build(CrystalStructure, CrystalSceneOptions, CrystalAppearance?)"/>.</summary>
 public sealed record CrystalSceneOptions
 {
     /// <summary>
