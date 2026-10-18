@@ -3,6 +3,8 @@
 //        Viewer3D.Sample --export DIR writes the README images to DIR
 //        Viewer3D.Sample --bench-ellipsoids N times a frame of N ellipsoids (run in Release)
 //        Viewer3D.Sample --bench-polyhedra N  times a frame of N translucent octahedra (run in Release)
+//        Viewer3D.Sample --bench-appearance N times the scene build of fluorite with up to N atoms, plain and with
+//                                             an appearance full of rules (run in Release)
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -35,6 +37,13 @@ internal static class Program
             PolyhedronBench.Run(polyhedra + 1 < args.Length && int.TryParse(args[polyhedra + 1], out int n) ? n : 500);
             return 0;
         }
+        int appearance = Array.IndexOf(args, "--bench-appearance");
+        if (appearance >= 0)
+        {
+            builder.SetupWithoutStarting();
+            AppearanceBench.Run(appearance + 1 < args.Length && int.TryParse(args[appearance + 1], out int n) ? n : CrystalSceneOptions.MaxAtoms);
+            return 0;
+        }
         int export = Array.IndexOf(args, "--export");
         if (export >= 0)
         {
@@ -45,6 +54,8 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(dir, "atoms.png"), Scenes.Viewer(Scenes.Atoms(), null).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "crystal-ball-and-stick.png"), Scenes.Crystal(CrystalStyle.BallAndStick).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "crystal-space-filling.png"), Scenes.Crystal(CrystalStyle.SpaceFilling).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "crystal-polyhedra-only.png"),
+                Scenes.Crystal(CrystalStyle.Polyhedra, CrystalAppearance.Default with { ShowAtoms = false }).RenderToPng(640, 480));
             Console.WriteLine($"Images written to {Path.GetFullPath(dir)}");
             return 0;
         }
@@ -188,7 +199,22 @@ internal static class Scenes
     /// Fluorite, CaF2 (Fm-3m, a = 5.463 angstrom), with every Ca-F bond (2.366 angstrom) and the Shannon ionic radii
     /// of Ca2+ (VIII, 1.12) and F- (IV, 1.31).
     /// </summary>
-    public static Viewer3DControl Crystal(CrystalStyle style)
+    public static Viewer3DControl Crystal(CrystalStyle style, CrystalAppearance? appearance = null)
+    {
+        CrystalStructure structure = Fluorite();
+        CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions { Style = style, IncludeLabels = false }, appearance);
+        var viewer = new Viewer3DControl { Scene = scene.Scene, AxisDirections = scene.Axes };
+        viewer.Camera!.LookAlong(-structure.Cell.AVector, structure.Cell.CVector);
+        viewer.Camera.Orbit(-35, -25);
+        viewer.Camera.Frame(scene.Scene);
+        return viewer;
+    }
+
+    /// <summary>
+    /// The fluorite of <see cref="Crystal"/>, with the cube of eight F around each Ca. The polyhedra show only in the
+    /// polyhedra styles, so the other styles give the scene they gave before the cubes.
+    /// </summary>
+    public static CrystalStructure Fluorite()
     {
         const double a = 5.463;
         var cell = new CrystalCell(a, a, a, 90, 90, 90);
@@ -211,12 +237,22 @@ internal static class Scenes
                             bonds.Add(new CrystalBond(0, f, new LatticeShift(i, j, k)));
                     }
         var structure = new CrystalStructure(cell, atoms, bonds);
-        structure = structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtoms(structure) };
-        CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions { Style = style, IncludeLabels = false });
-        var viewer = new Viewer3DControl { Scene = scene.Scene, AxisDirections = scene.Axes };
-        viewer.Camera!.LookAlong(-cell.AVector, cell.CVector);
-        viewer.Camera.Orbit(-35, -25);
-        viewer.Camera.Frame(scene.Scene);
-        return viewer;
+        // O cubo de cada Ca, escrito a mao: o vertice b tem o bit 0 em x, o 1 em y e o 2 em z (1 = +1/4, 0 = -1/4).
+        int[][] faces = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
+        var polyhedra = new List<CrystalPolyhedron>();
+        for (int ca = 0; ca < 4; ca++)
+        {
+            var vertices = new List<PolyhedronVertex>();
+            for (int b = 0; b < 8; b++)
+            {
+                double[] p = [atoms[ca].X + ((b & 1) != 0 ? 0.25 : -0.25), atoms[ca].Y + ((b & 2) != 0 ? 0.25 : -0.25),
+                    atoms[ca].Z + ((b & 4) != 0 ? 0.25 : -0.25)];
+                int[] shift = [.. p.Select(v => (int)Math.Floor(v))];
+                int f = 4 + 4 * (p[0] - shift[0] > 0.5 ? 1 : 0) + 2 * (p[1] - shift[1] > 0.5 ? 1 : 0) + (p[2] - shift[2] > 0.5 ? 1 : 0);
+                vertices.Add(new PolyhedronVertex(f, new LatticeShift(shift[0], shift[1], shift[2])));
+            }
+            polyhedra.Add(new CrystalPolyhedron(ca, vertices, faces));
+        }
+        return structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtoms(structure), Polyhedra = polyhedra };
     }
 }

@@ -28,6 +28,18 @@
 - `Viewer3D.Crystal`: `CrystalPacking.Measure` gives the packing fraction of a structure with the same radii the
   space filling style draws (`PackingMeasure`: the scale at which the nearest spheres touch, the sphere and cell
   volumes, and the fraction); `CellBasis.Volume` gives the cell volume.
+- `Viewer3D.Crystal`: `CrystalAppearance`, passed to `CrystalSceneBuilder.Build`, sets the look of a structure in three
+  cascades: atoms by element, site, atom and image of an atom in one cell (visible, color, opacity, radius scale,
+  label), bonds by element pair and bond (visible, color, opacity, radius), and polyhedra by central element, site and
+  index (visible, face color and opacity, faces, edges, edge color and width). Switches hide all atoms, bonds, the cell
+  or the polyhedron centers; atoms can be colored by site or occupancy, with `CrystalScene.ColorLegend`. A hidden atom
+  takes its label and rods with it and leaves the polyhedra it belongs to whole; `CrystalScene.HiddenAtomCount` counts
+  the hidden atoms. Without an appearance, or with `CrystalAppearance.Default`, the scene is the same as before.
+- `Viewer3D.Avalonia`: `SelectedItemIds` rings several items in the `Viewer3DSelectionColor` resource; `ItemClicked`
+  carries the modifier keys; `HoveredPick` tells what is under the pointer; `SceneBackground` sets the background over
+  the theme (alpha 0 gives a transparent PNG); `OutlineWidth` sets the outline of spheres and ellipses.
+- `Viewer3D.Sample`: `--bench-appearance N` times the scene build with and without appearance rules; the export writes
+  `crystal-polyhedra-only.png`.
 
 ## 0.1.0 - 10/17/2026
 

@@ -124,11 +124,35 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
   (covalent radii past Z 96, colors the Jmol scheme does not list) are estimates, marked `IsEstimated`.
   `CrystalSceneOptions.ElementColors` overrides the colors.
 
+### Appearance
+
+`CrystalSceneBuilder.Build(structure, options, appearance)` takes a `CrystalAppearance`, an immutable set of look
+rules. Each field of a style is nullable, and the most specific level that sets it wins:
+
+| Cascade | Levels, from general to specific | Fields |
+|---|---|---|
+| Atoms | `AtomDefault`, `ByElement`, `BySite`, `ByAtom`, `ByImage` | visible, color, opacity, radius scale, label, label text |
+| Bonds | `BondDefault`, `ByElementPair`, `ByBond` | visible, color, opacity, radius |
+| Polyhedra | `PolyhedronDefault`, `PolyhedronByElement`, `PolyhedronBySite`, `ByPolyhedron` | visible, face color and opacity, faces, edges, edge color and width |
+
+`ShowAtoms`, `ShowBonds`, `ShowCell` and `ShowPolyhedronCenters` switch whole groups off; `ColorScheme` colors the
+atoms by element, site or occupancy (the last two with `CrystalScene.ColorLegend`). A hidden atom takes its label and
+its rods with it; the polyhedra it belongs to stay whole. `CrystalScene.HiddenAtomCount` counts the hidden atoms of
+the block, and `ShowAll()` makes everything visible again and keeps the colors. Without an appearance, or with
+`CrystalAppearance.Default`, the builder gives the same scene as before.
+
+![Fluorite, polyhedra only](docs/images/crystal-polyhedra-only.png)
+
+`Viewer3DControl.SelectedItemIds` rings several items at once, `ItemClicked` carries the modifier keys (Ctrl+click
+to add to a selection), `HoveredPick` tells what is under the pointer (for a context menu), `SceneBackground` sets
+the background over the theme (alpha 0 for a transparent PNG) and `OutlineWidth` the outline of spheres and ellipses.
+Run `Viewer3D.Sample --bench-appearance N` in Release to time the build with and without rules.
+
 ## Theme colors
 
 The control reads these resources (a `Color` or a solid brush), with built-in light and dark defaults:
-`Viewer3DBackgroundColor`, `Viewer3DLabelColor`, `Viewer3DAxisColor0`, `Viewer3DAxisColor1` and
-`Viewer3DAxisColor2`.
+`Viewer3DBackgroundColor`, `Viewer3DLabelColor`, `Viewer3DSelectionColor` (the selection ring; the label color without
+it), `Viewer3DAxisColor0`, `Viewer3DAxisColor1` and `Viewer3DAxisColor2`.
 
 ## Performance
 
