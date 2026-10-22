@@ -118,6 +118,24 @@ public sealed record CrystalSceneOptions
 
     /// <summary>Color of the cell edges.</summary>
     public Rgba CellColor { get; init; } = new(128, 128, 128);
+
+    /// <summary>
+    /// Draws each void site (<see cref="CrystalAtom.IsVoid"/>) as the sphere of its <see cref="CrystalAtom.Radius"/>, the
+    /// largest sphere that fits in the void, instead of the small marker. A void without a radius keeps the marker.
+    /// </summary>
+    public bool ShowVoidSpheres { get; init; }
+
+    /// <summary>
+    /// Radius of the marker of a void site, in angstrom, in every style: the style scale does not apply to it, so a void
+    /// never looks like an atom.
+    /// </summary>
+    public double VoidMarkerRadius { get; init; } = 0.1;
+
+    /// <summary>Color of the void sites, unless an appearance rule gives one.</summary>
+    public Rgba VoidColor { get; init; } = new(150, 150, 150);
+
+    /// <summary>Opacity of the void markers and spheres, from 0 (invisible) to 1 (opaque).</summary>
+    public double VoidOpacity { get; init; } = 0.5;
 }
 
 /// <summary>One element of the legend.</summary>

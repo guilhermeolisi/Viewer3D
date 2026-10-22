@@ -40,6 +40,10 @@
   the theme (alpha 0 gives a transparent PNG); `OutlineWidth` sets the outline of spheres and ellipses.
 - `Viewer3D.Sample`: `--bench-appearance N` times the scene build with and without appearance rules; the export writes
   `crystal-polyhedra-only.png`.
+- `Viewer3D.Crystal`: `CrystalAtom.IsVoid` marks a void site, an empty interstice. It is drawn in every style as a small
+  translucent marker (`CrystalSceneOptions.VoidMarkerRadius`, `VoidColor`, `VoidOpacity`), or as the sphere of its
+  `Radius` with `ShowVoidSpheres`, can be the center of a polyhedron, and stays out of the legends, the displacement
+  shapes, the space filling scale and `CrystalPacking`.
 
 ## 0.1.0 - 10/17/2026
 

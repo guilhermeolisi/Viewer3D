@@ -40,6 +40,12 @@ namespace Viewer3D.Crystal;
 /// a center to its vertices only with <see cref="CrystalSceneOptions.ShowBondsInsidePolyhedra"/>.
 /// </para>
 /// <para>
+/// A void site (<see cref="CrystalAtom.IsVoid"/>) is drawn in every style as one translucent sphere of
+/// <see cref="CrystalSceneOptions.VoidColor"/>: the marker, <see cref="CrystalSceneOptions.VoidMarkerRadius"/> without the
+/// style scale, or its own radius with <see cref="CrystalSceneOptions.ShowVoidSpheres"/>. It has no displacement shapes,
+/// no sectors, no place in the legends and no weight in the space-filling scale, and a polyhedron may be centered on it.
+/// </para>
+/// <para>
 /// Spheres are shaded by the viewer with a light from the upper left. The polyhedra use
 /// <see cref="MeshLighting.KeyLight"/>, whose light comes from the same side.
 /// </para>
@@ -173,6 +179,12 @@ public sealed class CrystalSceneBuilder
                 string main = MainElement(atom);
                 radius[i] = CrystalPacking.RadiusOf(atom);
                 atomStyle[i] = app.ResolveAtom(structure, i);
+                if (atom.IsVoid)
+                {
+                    // A void: one color in every scheme, no sectors, no element rule.
+                    color[i] = options.VoidColor;
+                    continue;
+                }
                 elementRuleColor[i] = app.ByElement.TryGetValue(ElementTable.Normalize(main), out AtomStyle? e) ? e.Color : null;
                 switch (app.ColorScheme)
                 {
@@ -199,7 +211,7 @@ public sealed class CrystalSceneBuilder
                 int level = ProbabilityScale.Levels.Contains(options.ProbabilityLevel) ? options.ProbabilityLevel : 50;
                 scale = ProbabilityScale.For(level);
                 for (int i = 0; i < atoms.Count; i++)
-                    shapes[i] = ShapesOf(atoms[i], i);
+                    shapes[i] = atoms[i].IsVoid ? null : ShapesOf(atoms[i], i);
             }
             else
             {
@@ -258,12 +270,34 @@ public sealed class CrystalSceneBuilder
         /// <summary>Where a bond from the atom along <paramref name="direction"/> leaves its shapes.</summary>
         float Reach(int atom, LatticeShift t, Vector3 direction)
         {
+            if (structure.Atoms[atom].IsVoid)
+                return (float)VoidRadius(atom);
             if (!thermal)
                 return (float)(scale * radius[atom] * RadiusScale(Style(atom, t)));
             float reach = 0;
             foreach (DisplacementShape shape in shapes[atom]!)
                 reach = MathF.Max(reach, shape.Reach(direction));
             return reach;
+        }
+
+        /// <summary>
+        /// The drawn radius of a void site, in angstrom, the same in every style: its own radius with
+        /// <see cref="CrystalSceneOptions.ShowVoidSpheres"/>, else the marker.
+        /// </summary>
+        double VoidRadius(int atom)
+        {
+            if (options.ShowVoidSpheres && structure.Atoms[atom].Radius is double r && double.IsFinite(r) && r > 0)
+                return r;
+            double marker = options.VoidMarkerRadius;
+            return double.IsFinite(marker) && marker > 0 ? marker : 0.1;
+        }
+
+        /// <summary>The color of a void image: the rule color or the void color, with the void opacity, then faded.</summary>
+        Rgba VoidLook(int atom, AtomStyle style, bool faded)
+        {
+            double opacity = double.IsFinite(options.VoidOpacity) ? Math.Clamp(options.VoidOpacity, 0, 1) : 0.5;
+            Rgba c = WithOpacity(style.Color ?? color[atom], opacity);
+            return Look(c, faded, style.Opacity);
         }
 
         public CrystalScene Build(LatticeShift n, string? warning)
@@ -344,6 +378,19 @@ public sealed class CrystalSceneBuilder
                 Vector3 p = Position(atom, t);
                 drawn[(atom, t)] = p;
                 AtomStyle style = Style(atom, t);
+                if (structure.Atoms[atom].IsVoid)
+                {
+                    int voidId = nextId++;
+                    items.Add(new SphereItem
+                    {
+                        Id = voidId,
+                        Center = p,
+                        Radius = (float)VoidRadius(atom),
+                        Color = VoidLook(atom, style, faded),
+                    });
+                    lookup[voidId] = new CrystalItemInfo(CrystalItemKind.Atom, atom, -1, t - reduced[atom].Floor, faded);
+                    return;
+                }
                 Rgba? rule = OverrideColor(atom, style);
                 IReadOnlyList<SphereSector>? s = rule is null ? sectors[atom] : null;
                 if (s is not null && (faded || style.Opacity is not null))
@@ -551,13 +598,18 @@ public sealed class CrystalSceneBuilder
             }
         }
 
-        /// <summary>Order of each atom's site among the sites, by first appearance; an atom without site is a site of its label.</summary>
+        /// <summary>
+        /// Order of each atom's site among the sites, by first appearance; an atom without site is a site of its label.
+        /// The void sites take no place, so they do not shift the colors of the atoms.
+        /// </summary>
         static Dictionary<int, int> SiteOrder(IReadOnlyList<CrystalAtom> atoms)
         {
             var keys = new Dictionary<string, int>(StringComparer.Ordinal);
             var result = new Dictionary<int, int>();
             for (int i = 0; i < atoms.Count; i++)
             {
+                if (atoms[i].IsVoid)
+                    continue;
                 string key = SiteKey(atoms[i]);
                 if (!keys.TryGetValue(key, out int order))
                     keys[key] = order = keys.Count;
@@ -587,7 +639,7 @@ public sealed class CrystalSceneBuilder
                         IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
                         for (int i = 0; i < atoms.Count; i++)
                         {
-                            if (shown is not null && !shown.Contains(i))
+                            if ((shown is not null && !shown.Contains(i)) || atoms[i].IsVoid)
                                 continue;
                             if (seen.Add(SiteKey(atoms[i])))
                                 result.Add(new ColorLegendEntry(atoms[i].Label, color[i]));
@@ -816,6 +868,8 @@ public sealed class CrystalSceneBuilder
                 if (shown is not null && !shown.Contains(i))
                     continue;
                 CrystalAtom atom = atoms[i];
+                if (atom.IsVoid)
+                    continue;
                 if (atom.Shares is { Count: > 0 } shares)
                 {
                     foreach (ElementShare share in shares)

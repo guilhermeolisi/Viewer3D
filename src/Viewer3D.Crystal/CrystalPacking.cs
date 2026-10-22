@@ -24,7 +24,8 @@ public sealed record PackingMeasure(double TouchingScale, double SphereVolume, d
 /// </para>
 /// <para>
 /// The fraction is Σ occ·(4/3)π(s·r)³ / V over the atoms of the cell, occ the occupancy (the sum of the shares on a
-/// mixed site). For one element in the ideal packings it gives the textbook values: simple cubic π/6 = 0.5236,
+/// mixed site). Void sites (<see cref="CrystalAtom.IsVoid"/>) are not atoms: they enter neither the scale nor the sum.
+/// For one element in the ideal packings it gives the textbook values: simple cubic π/6 = 0.5236,
 /// body-centred cubic π√3/8 = 0.6802, face-centred cubic and ideal hexagonal close packing π/(3√2) = 0.7405.
 /// </para>
 /// </remarks>
@@ -49,6 +50,8 @@ public static class CrystalPacking
         double spheres = 0;
         for (int i = 0; i < atoms.Count; i++)
         {
+            if (atoms[i].IsVoid)
+                continue;
             double r = scale * radius[i];
             spheres += OccupancyOf(atoms[i]) * 4.0 / 3.0 * Math.PI * r * r * r;
         }
@@ -82,10 +85,13 @@ public static class CrystalPacking
         }
 
         double best = double.PositiveInfinity;
-        int count = structure.Atoms.Count;
+        IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+        int count = atoms.Count;
         foreach (CrystalBond bond in structure.Bonds)
         {
             if ((uint)bond.First >= (uint)count || (uint)bond.Second >= (uint)count)
+                continue;
+            if (atoms[bond.First].IsVoid || atoms[bond.Second].IsVoid)
                 continue;
             LatticeShift shift = reduced[bond.Second].Floor + bond.Shift - reduced[bond.First].Floor;
             double d = Distance(bond.First, bond.Second, shift);
@@ -95,7 +101,13 @@ public static class CrystalPacking
         if (double.IsFinite(best))
             return best;
         for (int i = 0; i < count; i++)
+        {
+            if (atoms[i].IsVoid)
+                continue;
             for (int j = i; j < count; j++)
+            {
+                if (atoms[j].IsVoid)
+                    continue;
                 for (int a = -1; a <= 1; a++)
                     for (int b = -1; b <= 1; b++)
                         for (int c = -1; c <= 1; c++)
@@ -106,6 +118,8 @@ public static class CrystalPacking
                             if (d > 1e-6)
                                 best = Math.Min(best, d / (radius[i] + radius[j]));
                         }
+            }
+        }
         return double.IsFinite(best) ? best : 1.0;
     }
 }

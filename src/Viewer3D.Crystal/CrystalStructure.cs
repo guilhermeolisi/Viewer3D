@@ -42,6 +42,14 @@ public sealed record CrystalAtom(string Label, string Element, double X, double 
     public double? Radius { get; init; }
 
     /// <summary>
+    /// Marks a void site: an empty interstice of the structure, not an atom. It is drawn as a small translucent marker
+    /// (and, with <see cref="CrystalSceneOptions.ShowVoidSpheres"/>, as the sphere of radius <see cref="Radius"/>, the
+    /// largest sphere that fits in the void), it can be the center of a polyhedron, and it stays out of the legends, of
+    /// the space-filling scale, of the displacement shapes and of <see cref="CrystalPacking"/>.
+    /// </summary>
+    public bool IsVoid { get; init; }
+
+    /// <summary>
     /// Index of the crystallographic site the atom belongs to: atoms of one site are equivalent by symmetry. Used to
     /// extend bonds given for one atom of a site to the others (<see cref="CrystalBondExpansion"/>). -1 when unknown.
     /// </summary>
