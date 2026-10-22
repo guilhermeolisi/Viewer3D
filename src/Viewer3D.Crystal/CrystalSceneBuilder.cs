@@ -194,6 +194,9 @@ public sealed class CrystalSceneBuilder
                     case AtomColorScheme.Occupancy:
                         color[i] = OccupancyColor(atom.Occupancy);
                         break;
+                    case AtomColorScheme.Group when (uint)atom.Group < (uint)structure.Groups.Count:
+                        color[i] = structure.Groups[atom.Group].Color;
+                        break;
                     default:
                         color[i] = ColorOf(main);
                         sectors[i] = SectorsOf(atom);
@@ -409,6 +412,7 @@ public sealed class CrystalSceneBuilder
                     Radius = (float)(scale * radius[atom] * RadiusScale(style)),
                     Color = baseColor,
                     Sectors = s,
+                    Halo = style.Halo,
                 });
                 lookup[id] = new CrystalItemInfo(CrystalItemKind.Atom, atom, -1, t - reduced[atom].Floor, faded);
             }
@@ -545,6 +549,21 @@ public sealed class CrystalSceneBuilder
             if (app.ShowCell)
                 AddCellEdges(items, n);
 
+            if (app.ShowAnnotations)
+            {
+                IReadOnlyList<SceneItem> annotations = structure.Annotations;
+                for (int k = 0; k < annotations.Count; k++)
+                {
+                    SceneItem item = annotations[k];
+                    items.Add(item);
+                    // O Id e do dono e negativo; varios itens com o mesmo Id contam como a primeira anotacao dele.
+                    lookup.TryAdd(item.Id, new CrystalItemInfo(CrystalItemKind.Annotation, -1, -1, LatticeShift.Zero, false)
+                    {
+                        AnnotationIndex = k,
+                    });
+                }
+            }
+
             if (options.IncludeLabels)
             {
                 foreach ((int atom, LatticeShift t) in own)
@@ -648,6 +667,31 @@ public sealed class CrystalSceneBuilder
                     }
                 case AtomColorScheme.Occupancy:
                     return [new("0", OccupancyColor(0)), new("0.5", OccupancyColor(0.5)), new("1", OccupancyColor(1))];
+                case AtomColorScheme.Group:
+                    {
+                        // Os grupos com atomo desenhado, na ordem dos grupos; depois os elementos dos atomos sem grupo.
+                        IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+                        IReadOnlyList<CrystalAtomGroup> groups = structure.Groups;
+                        var present = new bool[groups.Count];
+                        var loose = new HashSet<string>(StringComparer.Ordinal);
+                        for (int i = 0; i < atoms.Count; i++)
+                        {
+                            if ((shown is not null && !shown.Contains(i)) || atoms[i].IsVoid)
+                                continue;
+                            if ((uint)atoms[i].Group < (uint)groups.Count)
+                                present[atoms[i].Group] = true;
+                            else
+                                loose.Add(Symbol(MainElement(atoms[i])));
+                        }
+                        var result = new List<ColorLegendEntry>();
+                        for (int g = 0; g < groups.Count; g++)
+                        {
+                            if (present[g])
+                                result.Add(new ColorLegendEntry(groups[g].Label, groups[g].Color));
+                        }
+                        result.AddRange(legend.Where(e => loose.Contains(e.Element)).Select(e => new ColorLegendEntry(e.Element, e.Color)));
+                        return result;
+                    }
                 default:
                     return [.. legend.Select(e => new ColorLegendEntry(e.Element, e.Color))];
             }

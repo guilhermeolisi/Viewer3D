@@ -157,6 +157,9 @@ public enum CrystalItemKind
 
     /// <summary>A coordination polyhedron, its faces or its edges.</summary>
     Polyhedron,
+
+    /// <summary>An item of <see cref="CrystalStructure.Annotations"/>.</summary>
+    Annotation,
 }
 
 /// <summary>What a sphere, rod or polyhedron of a <see cref="CrystalScene"/> stands for.</summary>
@@ -174,6 +177,12 @@ public sealed record CrystalItemInfo(CrystalItemKind Kind, int AtomIndex, int Bo
 {
     /// <summary>The polyhedron, in <see cref="CrystalStructure.Polyhedra"/>; -1 for a sphere or a rod.</summary>
     public int PolyhedronIndex { get; init; } = -1;
+
+    /// <summary>
+    /// The annotation, in <see cref="CrystalStructure.Annotations"/> (the first one with the picked id); -1 for anything
+    /// else.
+    /// </summary>
+    public int AnnotationIndex { get; init; } = -1;
 }
 
 /// <summary>The scene of a crystal structure, with what the viewer around it needs.</summary>

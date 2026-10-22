@@ -13,6 +13,12 @@ public enum AtomColorScheme
 
     /// <summary>From blue at occupancy 0 to red at occupancy 1.</summary>
     Occupancy,
+
+    /// <summary>
+    /// The color of the atom's group (<see cref="CrystalAtom.Group"/>, <see cref="CrystalStructure.Groups"/>); an atom
+    /// without a group takes the element color.
+    /// </summary>
+    Group,
 }
 
 /// <summary>The text of an atom label.</summary>
@@ -54,6 +60,9 @@ public sealed record AtomStyle
     /// <summary>What the label says.</summary>
     public AtomLabelText? LabelText { get; init; }
 
+    /// <summary>A ring of this color around the sphere (<see cref="SphereItem.Halo"/>), to make the atom stand out.</summary>
+    public Rgba? Halo { get; init; }
+
     /// <summary>This style over <paramref name="lower"/>: each field is this one's when set, the lower one's when not.</summary>
     public AtomStyle Over(AtomStyle lower) => new()
     {
@@ -63,6 +72,7 @@ public sealed record AtomStyle
         RadiusScale = RadiusScale ?? lower.RadiusScale,
         ShowLabel = ShowLabel ?? lower.ShowLabel,
         LabelText = LabelText ?? lower.LabelText,
+        Halo = Halo ?? lower.Halo,
     };
 }
 
@@ -155,9 +165,8 @@ public readonly record struct ElementPair(string First, string Second)
 /// <remarks>
 /// <para>
 /// An atom takes, field by field, the most particular rule that sets the field: its image (<see cref="ByImage"/>) over
-/// the atom (<see cref="ByAtom"/>) over its site (<see cref="BySite"/>) over its element (<see cref="ByElement"/>, the
-/// element with the largest share) over <see cref="AtomDefault"/>. A new level (a group of sites, for example) goes
-/// between the site and the atom, in <see cref="ResolveAtom"/>.
+/// the atom (<see cref="ByAtom"/>) over its group (<see cref="ByGroup"/>) over its site (<see cref="BySite"/>) over its
+/// element (<see cref="ByElement"/>, the element with the largest share) over <see cref="AtomDefault"/>.
 /// </para>
 /// <para>
 /// A bond takes <see cref="ByBond"/> over <see cref="ByElementPair"/> over <see cref="BondDefault"/>. A polyhedron takes
@@ -182,6 +191,9 @@ public sealed record CrystalAppearance
     /// <summary>False hides the atoms at the center of a drawn polyhedron.</summary>
     public bool ShowPolyhedronCenters { get; init; } = true;
 
+    /// <summary>False hides <see cref="CrystalStructure.Annotations"/>.</summary>
+    public bool ShowAnnotations { get; init; } = true;
+
     /// <summary>The colors of atoms without a color rule.</summary>
     public AtomColorScheme ColorScheme { get; init; } = AtomColorScheme.Element;
 
@@ -196,6 +208,9 @@ public sealed record CrystalAppearance
 
     /// <summary>Rules by <see cref="CrystalAtom.SiteIndex"/>.</summary>
     public ImmutableDictionary<int, AtomStyle> BySite { get; init; } = ImmutableDictionary<int, AtomStyle>.Empty;
+
+    /// <summary>Rules by <see cref="CrystalAtom.Group"/>.</summary>
+    public ImmutableDictionary<int, AtomStyle> ByGroup { get; init; } = ImmutableDictionary<int, AtomStyle>.Empty;
 
     /// <summary>Rules by atom index, for every image of the atom.</summary>
     public ImmutableDictionary<int, AtomStyle> ByAtom { get; init; } = ImmutableDictionary<int, AtomStyle>.Empty;
@@ -247,6 +262,8 @@ public sealed record CrystalAppearance
             style = e.Over(style);
         if (a.SiteIndex >= 0 && BySite.TryGetValue(a.SiteIndex, out AtomStyle? s))
             style = s.Over(style);
+        if (a.Group >= 0 && ByGroup.TryGetValue(a.Group, out AtomStyle? g))
+            style = g.Over(style);
         if (ByAtom.TryGetValue(atom, out AtomStyle? x))
             style = x.Over(style);
         if (offset is { } o && ByImage.TryGetValue(new AtomImage(atom, o), out AtomStyle? i))
@@ -292,8 +309,8 @@ public sealed record CrystalAppearance
     }
 
     /// <summary>
-    /// The same appearance with every <c>Visible</c> rule taken out and the atoms, rods, cell and polyhedron centers
-    /// shown; colors, opacities and sizes stay.
+    /// The same appearance with every <c>Visible</c> rule taken out and the atoms, rods, cell, polyhedron centers and
+    /// annotations shown; colors, opacities, halos and sizes stay.
     /// </summary>
     public CrystalAppearance ShowAll() => this with
     {
@@ -301,9 +318,11 @@ public sealed record CrystalAppearance
         ShowBonds = true,
         ShowCell = true,
         ShowPolyhedronCenters = true,
+        ShowAnnotations = true,
         AtomDefault = AtomDefault with { Visible = null },
         ByElement = Clear(ByElement, s => s with { Visible = null }),
         BySite = Clear(BySite, s => s with { Visible = null }),
+        ByGroup = Clear(ByGroup, s => s with { Visible = null }),
         ByAtom = Clear(ByAtom, s => s with { Visible = null }),
         ByImage = Clear(ByImage, s => s with { Visible = null }),
         BondDefault = BondDefault with { Visible = null },

@@ -44,6 +44,14 @@
   translucent marker (`CrystalSceneOptions.VoidMarkerRadius`, `VoidColor`, `VoidOpacity`), or as the sphere of its
   `Radius` with `ShowVoidSpheres`, can be the center of a polyhedron, and stays out of the legends, the displacement
   shapes, the space filling scale and `CrystalPacking`.
+- `Viewer3D`: `MeshShapes.Arrow` (a shaft and a cone, tip on the end point), `MeshShapes.Polygon` (a flat, double sided
+  fan with its outline as edges, translucent by alpha), `LineShapes.Polyline` (one line per segment, with one segment
+  highlighted in its own color and width) and `SphereItem.Halo` (a ring a few pixels wide just outside the disc).
+- `Viewer3D.Crystal`: `CrystalAtom.Group` puts an atom in one of `CrystalStructure.Groups` (a label and a color), with
+  its own level of rules, `CrystalAppearance.ByGroup`, between the site and the atom, and the `AtomColorScheme.Group`
+  scheme with the groups in the color legend. `AtomStyle.Halo` rings an atom. `CrystalStructure.Annotations` are scene
+  items drawn over the structure (lines, arrows, planes, labels), picked as `CrystalItemKind.Annotation` with
+  `CrystalItemInfo.AnnotationIndex`, and hidden by `CrystalAppearance.ShowAnnotations`.
 
 ## 0.1.0 - 10/17/2026
 
