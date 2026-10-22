@@ -556,7 +556,7 @@ public sealed class CrystalSceneBuilder
                 {
                     SceneItem item = annotations[k];
                     items.Add(item);
-                    // O Id e do dono e negativo; varios itens com o mesmo Id contam como a primeira anotacao dele.
+                    // The owner gives the Id, negative; several items with one Id count as the first annotation with it.
                     lookup.TryAdd(item.Id, new CrystalItemInfo(CrystalItemKind.Annotation, -1, -1, LatticeShift.Zero, false)
                     {
                         AnnotationIndex = k,
@@ -669,7 +669,7 @@ public sealed class CrystalSceneBuilder
                     return [new("0", OccupancyColor(0)), new("0.5", OccupancyColor(0.5)), new("1", OccupancyColor(1))];
                 case AtomColorScheme.Group:
                     {
-                        // Os grupos com atomo desenhado, na ordem dos grupos; depois os elementos dos atomos sem grupo.
+                        // The groups with a drawn atom, in group order; then the elements of the atoms without a group.
                         IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
                         IReadOnlyList<CrystalAtomGroup> groups = structure.Groups;
                         var present = new bool[groups.Count];
