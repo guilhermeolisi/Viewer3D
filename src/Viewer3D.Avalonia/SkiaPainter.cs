@@ -62,7 +62,7 @@ internal static class SkiaPainter
             {
                 bool selected = IsSelected(scene, list.CircleItems[i], options.Selected);
                 var sphere = scene?.Items[list.CircleItems[i]] as SphereItem;
-                PaintCircle(canvas, list, i, sphere?.Sectors, sphere?.Dashed == true, fill, stroke,
+                PaintCircle(canvas, list, i, sphere?.Sectors, sphere?.Dashed == true, sphere?.Halo, fill, stroke,
                     selected ? options.Selection : (SKColor?)null, options.OutlineWidth);
             }
             else if (kind == DrawKind.Ellipse)
@@ -111,8 +111,11 @@ internal static class SkiaPainter
         canvas.DrawVertices(vertices, SKBlendMode.Dst, paint);
     }
 
+    /// <summary>Width of the halo ring of a <see cref="SphereItem"/>, in device-independent pixels.</summary>
+    internal const float HaloWidth = 3f;
+
     static void PaintCircle(SKCanvas canvas, DrawList list, int i, IReadOnlyList<SphereSector>? sectors, bool dashed,
-        SKPaint fill, SKPaint stroke, SKColor? outline, float? outlineWidth)
+        Rgba? halo, SKPaint fill, SKPaint stroke, SKColor? outline, float? outlineWidth)
     {
         ReadOnlySpan<float> data = list.Circles;
         float x = data[3 * i], y = data[3 * i + 1], r = data[3 * i + 2];
@@ -139,6 +142,14 @@ internal static class SkiaPainter
                 stroke.StrokeCap = SKStrokeCap.Butt;
                 canvas.DrawCircle(x, y, r, stroke);
             }
+        }
+        if (halo is Rgba h)
+        {
+            // A ring just outside the disc, from r + 0.5 to r + 0.5 + HaloWidth; the selection outline goes over it.
+            stroke.Color = new SKColor(h.ToArgb());
+            stroke.StrokeWidth = HaloWidth;
+            stroke.StrokeCap = SKStrokeCap.Butt;
+            canvas.DrawCircle(x, y, r + 0.5f + HaloWidth / 2, stroke);
         }
         if (outline is SKColor o)
         {

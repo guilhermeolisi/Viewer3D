@@ -106,6 +106,12 @@ public sealed class SphereItem : SceneItem
     /// has nothing to show, such as an atom with no displacement data.
     /// </summary>
     public bool Dashed { get; init; }
+
+    /// <summary>
+    /// Optional halo: a ring a few pixels wide just outside the disc, in this color, to make the sphere stand out from
+    /// its neighbors. Null draws no halo. The selection outline, when the sphere is selected, is drawn over it.
+    /// </summary>
+    public Rgba? Halo { get; init; }
 }
 
 /// <summary>
