@@ -1,6 +1,6 @@
 namespace Viewer3D.Crystal;
 
-/// <summary>Why a trajectory reader (<see cref="XyzTrajectoryReader"/>) refused a file.</summary>
+/// <summary>Why a trajectory reader (<see cref="XyzTrajectoryReader"/>, <see cref="AxsfReader"/>) refused a file.</summary>
 public enum TrajectoryReadError
 {
     /// <summary>A line could not be read: a missing or non-numeric value, a count past the end of the file, a cell without volume.</summary>

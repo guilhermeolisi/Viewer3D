@@ -55,6 +55,10 @@ public static class ObjSequenceReader
     /// <summary>Reads every <c>*.obj</c> file of <paramref name="folder"/> (not its subfolders) as the frames of an animation.</summary>
     /// <inheritdoc cref="Read(IEnumerable{string}, TimeSpan, ObjReadOptions?, long, CancellationToken)"/>
     /// <param name="folder">The folder of the frames.</param>
+    /// <param name="frameDuration">How long each frame stays on screen. Positive.</param>
+    /// <param name="options">Limits of each file; null uses <see cref="ObjReadOptions.Default"/>.</param>
+    /// <param name="maxWeight">Ceiling of the weight of all frames (<see cref="SceneSequence.Weight"/>).</param>
+    /// <param name="cancellationToken">Checked between files and inside each one.</param>
     public static SceneSequence ReadFolder(string folder, TimeSpan frameDuration, ObjReadOptions? options = null,
         long maxWeight = SceneSequence.DefaultMaxWeight, CancellationToken cancellationToken = default)
     {

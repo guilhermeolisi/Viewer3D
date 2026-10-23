@@ -102,6 +102,9 @@
   change) and Extended XYZ (`Lattice`, `pbc`, `Properties` with the `species` or `Z` and `pos` columns), elements as
   symbols or atomic numbers. `TrajectoryReadOptions` (64 MiB a file, 100,000 atoms a frame, 100 ms a frame) and
   `TrajectoryReadException` with `TrajectoryReadError` and the line.
+- `Viewer3D.Crystal`: `AxsfReader` reads XCrySDen animations (AXSF) and still XSF files: `PRIMVEC` fixed or per step,
+  `PRIMCOORD` with atomic numbers or symbols (force columns read past), `ATOMS` for a molecule; `CONVVEC`, `CONVCOORD`,
+  data grids and comments are skipped, and an `ANIMSTEPS` that disagrees with the file warns.
 - `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
   `--bench-sequence N` times a frame of a sequence of fluorite blocks.
 

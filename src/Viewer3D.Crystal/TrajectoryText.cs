@@ -20,6 +20,9 @@ internal sealed class TrajectoryText
         this.options = options;
     }
 
+    /// <summary>Most atoms a frame may hold (<see cref="TrajectoryReadOptions.MaxAtomsPerFrame"/>).</summary>
+    public int AtomCountLimit => options.MaxAtomsPerFrame;
+
     /// <summary>The 1-based number of the last line read.</summary>
     public int Line { get; private set; }
 
