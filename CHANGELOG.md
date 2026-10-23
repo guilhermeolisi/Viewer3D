@@ -63,6 +63,17 @@
   (`CrystalSceneEstimate`), and `TryBuild` builds only within the ceiling. A block far past the ceiling is no longer
   built before falling back to one cell.
 - `Viewer3D.Sample`: `--bench-cost 3000,6000,...` times the build and the frame of fluorite blocks of those costs.
+- `Viewer3D`: `ObjReader` reads triangle meshes from Wavefront OBJ files (vertices, normals, faces of any polygon,
+  negative indices, `mtllib`/`usemtl` with `Kd` and `d`) into an `ObjModel`, one `MeshItem` per material. The file is
+  treated as untrusted: `ObjReadOptions` bounds the triangles (100,000 by default), the vertices and the size, a bad
+  line is refused with its number (`ObjReadException`), the read can be canceled, and a material file is only read
+  from the folder of the model.
+- `Viewer3D`: `LineItem.Dash` draws a dashed line whose pattern runs across the pieces it is drawn in
+  (`DrawList.SegmentDashes` and `SegmentDashOffsets`). `SceneItem.Pickable` set to false lets picking go through an
+  item. `MeasureShapes` builds the overlay of a distance (dashed line and label) and of an angle (dashed arms, arc and
+  label).
+- `Viewer3D.Sample`: `--bench-obj 25000,100000,...` times the read and the frame of OBJ spheres of about those
+  triangle counts; the sample shows an OBJ mesh and a measurement.
 
 ## 0.1.0 - 10/17/2026
 

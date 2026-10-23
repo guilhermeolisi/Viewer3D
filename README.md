@@ -182,6 +182,42 @@ to add to a selection), `HoveredPick` tells what is under the pointer (for a con
 the background over the theme (alpha 0 for a transparent PNG) and `OutlineWidth` the outline of spheres and ellipses.
 Run `Viewer3D.Sample --bench-appearance N` in Release to time the build with and without rules.
 
+## OBJ meshes
+
+`ObjReader.Read(path)` reads a Wavefront OBJ file into an `ObjModel`, and `ToScene()` gives a scene to show:
+
+```csharp
+ObjModel model = ObjReader.Read("part.obj");
+viewer.Scene = model.ToScene();
+viewer.Camera!.Frame(viewer.Scene);
+```
+
+It reads vertices, normals, faces of any polygon (split as a fan of triangles), negative indices and the `v/vt/vn`
+corner forms, and the materials of `mtllib`/`usemtl` with their diffuse color (`Kd`) and opacity (`d`, or `Tr`). Each
+material becomes one double-sided `MeshItem`, shaded flat with the key light; normals only orient the winding of the
+triangles. Texture coordinates, groups, lines and curves are accepted and ignored. `ObjModel.Warnings` lists what was
+read with a fallback, such as a material file that was not found.
+
+The file is treated as untrusted input. `ObjReadOptions` bounds the read: 100,000 triangles by default, 300,000
+vertices (three per triangle, so an export with separate vertices for each face fits) and 64 MB. A model over a limit,
+or with a bad line, is refused with an `ObjReadException` that gives the reason and the line, and is never drawn in
+part. A material file is only looked for inside the folder of the model. The read takes a `CancellationToken`.
+
+The triangle ceiling comes from the frame time: the measurements under Performance fit about 14 ms per frame plus
+0.25 microseconds per triangle, so 100,000 triangles paint in about 40 ms. Run `Viewer3D.Sample --bench-obj
+25000,100000,250000` in Release to time the read and the frame on your machine and choose another ceiling.
+
+![A sphere read from OBJ text, with two materials](docs/images/mesh-obj.png)
+
+## Measurement overlays
+
+`MeasureShapes.Distance` gives a dashed line between two points with a label at its middle, and `MeasureShapes.Angle`
+the two dashed arms of an angle with an arc and its label. Add them to the scene, after the items they measure; their
+items are not `Pickable`, so a click on the overlay still picks the atom or bond under it. The caller computes and
+formats the value. `LineItem.Dash` dashes any line.
+
+![The distance from the center to a corner and the tetrahedral angle](docs/images/measure.png)
+
 ## Theme colors
 
 The control reads these resources (a `Color` or a solid brush), with built-in light and dark defaults:

@@ -7,6 +7,8 @@
 //                                             an appearance full of rules (run in Release)
 //        Viewer3D.Sample --bench-cost 3000,6000 times the build and the frame of fluorite blocks of those costs, to set a
 //                                             cost ceiling (run in Release)
+//        Viewer3D.Sample --bench-obj 25000,100000 times the read and the frame of OBJ spheres of about those triangle
+//                                             counts, to check the OBJ ceiling (run in Release)
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -56,6 +58,16 @@ internal static class Program
             CostBench.Run(costs.Length > 0 ? costs : [3000, 6000, 12000, 24000]);
             return 0;
         }
+        int obj = Array.IndexOf(args, "--bench-obj");
+        if (obj >= 0)
+        {
+            builder.SetupWithoutStarting();
+            int[] counts = obj + 1 < args.Length
+                ? [.. args[obj + 1].Split(',').Select(x => int.TryParse(x, out int c) ? c : 0).Where(c => c > 0)]
+                : [];
+            ObjBench.Run(counts.Length > 0 ? counts : [25_000, 100_000, 250_000, 500_000]);
+            return 0;
+        }
         int export = Array.IndexOf(args, "--export");
         if (export >= 0)
         {
@@ -69,6 +81,8 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(dir, "crystal-polyhedra-only.png"),
                 Scenes.Crystal(CrystalStyle.Polyhedra, CrystalAppearance.Default with { ShowAtoms = false }).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "crystal-sphere.png"), Scenes.SphereCrystal().RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "mesh-obj.png"), Scenes.Viewer(ObjText.BandedSphere(), null).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "measure.png"), Scenes.Viewer(Scenes.Measured(), null).RenderToPng(640, 480));
             Console.WriteLine($"Images written to {Path.GetFullPath(dir)}");
             return 0;
         }
@@ -110,6 +124,8 @@ internal sealed class SampleApp : Application
                                 new TabItem { Header = "Balls and sticks", Content = Scenes.Viewer(Scenes.Atoms(), null) },
                                 new TabItem { Header = "Crystal", Content = Scenes.Crystal(CrystalStyle.BallAndStick) },
                                 new TabItem { Header = "Space filling", Content = Scenes.Crystal(CrystalStyle.SpaceFilling) },
+                                new TabItem { Header = "OBJ mesh", Content = Scenes.Viewer(ObjText.BandedSphere(), null) },
+                                new TabItem { Header = "Measurement", Content = Scenes.Viewer(Scenes.Measured(), null) },
                             },
                         },
                     },
@@ -206,6 +222,24 @@ internal static class Scenes
         for (int e = 0; e < edges.Length; e += 2)
             items.Add(new LineItem { Start = c[edges[e]], End = c[edges[e + 1]], Color = new Rgba(120, 120, 120), Width = 1.5f });
         return new Scene(items);
+    }
+
+    /// <summary>
+    /// The scene of <see cref="Atoms"/> with two measurements over it: the distance from the center to a corner, and
+    /// the angle at the center between two corners (the tetrahedral angle, arccos(-1/3)).
+    /// </summary>
+    public static Scene Measured()
+    {
+        var red = new Rgba(210, 40, 60);
+        Vector3 corner = new(1, 1, 1), other = new(-1, -1, 1);
+        float distance = corner.Length();
+        float angle = MathF.Acos(Vector3.Dot(corner, other) / (corner.Length() * other.Length())) * 180 / MathF.PI;
+        return new Scene([
+            .. Atoms().Items,
+            .. MeasureShapes.Distance(Vector3.Zero, corner, red, distance.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)),
+            .. MeasureShapes.Angle(corner, Vector3.Zero, other, 0.7f, red,
+                angle.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "°"),
+        ]);
     }
 
     /// <summary>
