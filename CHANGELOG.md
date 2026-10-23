@@ -98,6 +98,10 @@
   `CrystalBondFinder` finds bonds from the geometry (the Jmol criterion, d up to r1 + r2 + 0.45 angstrom, with no
   metal-metal bond when the structure has another element). `CrystalCell.FromVectors` makes a cell from three edge
   vectors in any orientation.
+- `Viewer3D.Crystal`: `XyzTrajectoryReader` reads XYZ trajectories (any number of frames, the atom count free to
+  change) and Extended XYZ (`Lattice`, `pbc`, `Properties` with the `species` or `Z` and `pos` columns), elements as
+  symbols or atomic numbers. `TrajectoryReadOptions` (64 MiB a file, 100,000 atoms a frame, 100 ms a frame) and
+  `TrajectoryReadException` with `TrajectoryReadError` and the line.
 - `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
   `--bench-sequence N` times a frame of a sequence of fluorite blocks.
 
