@@ -302,6 +302,15 @@ internal static class SkiaPainter
         }
         stroke.Color = new SKColor(argb);
         stroke.StrokeWidth = MathF.Max(width, 0.5f);
+        float dash = list.SegmentDashes[i];
+        if (dash > 0)
+        {
+            using var effect = SKPathEffect.CreateDash([dash, dash], list.SegmentDashOffsets[i]);
+            stroke.PathEffect = effect;
+            canvas.DrawLine(x1, y1, x2, y2, stroke);
+            stroke.PathEffect = null;
+            return;
+        }
         canvas.DrawLine(x1, y1, x2, y2, stroke);
         if (rod && width > 3f)
         {

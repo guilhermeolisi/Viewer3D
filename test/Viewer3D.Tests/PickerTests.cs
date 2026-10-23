@@ -137,4 +137,36 @@ public class PickerTests
         Assert.Equal(3, Picker.Pick(list, 100, 102)?.ItemId);
         Assert.Null(Picker.Pick(list, 100, 110));
     }
+
+    [Fact]
+    public void NonPickableSegment_IsSkipped()
+    {
+        // An overlay line in front of a sphere: the click goes through it to the sphere.
+        var sphere = new SphereItem { Id = 1, Center = new Vector3(0, 0, -1), Radius = 0.5f };
+        var overlay = new LineItem { Id = 2, Start = new Vector3(-1, 0, 1), End = new Vector3(1, 0, 1), Width = 4, Pickable = false };
+        var plain = new LineItem { Id = 3, Start = new Vector3(-1, 0, 1), End = new Vector3(1, 0, 1), Width = 4 };
+
+        DrawList withOverlay = new FramePreparer().Prepare(new Scene([sphere, overlay]), Camera, 200, 200);
+        DrawList withPlain = new FramePreparer().Prepare(new Scene([sphere, plain]), Camera, 200, 200);
+
+        Assert.Equal(1, Picker.Pick(withOverlay, 100, 100)?.ItemId);
+        Assert.Equal(3, Picker.Pick(withPlain, 100, 100)?.ItemId);
+        Assert.Null(Picker.Pick(withOverlay, 180, 100));
+    }
+
+    [Fact]
+    public void NonPickableSphereAndMesh_AreSkipped()
+    {
+        var hidden = new SphereItem { Id = 1, Center = new Vector3(0, 0, 1), Radius = 0.5f, Pickable = false };
+        var mesh = new MeshItem
+        {
+            Id = 2,
+            Positions = [new(-1, -1, 0), new(1, -1, 0), new(1, 1, 0), new(-1, 1, 0)],
+            Indices = [0, 1, 2, 0, 2, 3],
+            Pickable = false,
+        };
+        DrawList list = new FramePreparer().Prepare(new Scene([hidden, mesh]), Camera, 200, 200);
+
+        Assert.Null(Picker.Pick(list, 100, 100));
+    }
 }

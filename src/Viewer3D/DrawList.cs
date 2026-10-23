@@ -50,6 +50,8 @@ public sealed class DrawList
     internal uint[] SegColor = [];
     internal int[] SegItem = [];
     internal bool[] SegRound = [];
+    internal float[] SegDash = []; // dash length, 0 = solid
+    internal float[] SegDashOffset = []; // distance along the drawn line to the start of the segment
 
     internal float[] LabelData = []; // x, y, size
     internal string[] LabelText = [];
@@ -136,6 +138,15 @@ public sealed class DrawList
     /// <summary>Whether each segment is a rod (round, shaded) or a plain line.</summary>
     public ReadOnlySpan<bool> SegmentIsRod => SegRound.AsSpan(0, SegmentCount);
 
+    /// <summary>Dash length per segment, in device-independent pixels; 0 for a solid segment.</summary>
+    public ReadOnlySpan<float> SegmentDashes => SegDash.AsSpan(0, SegmentCount);
+
+    /// <summary>
+    /// For a dashed segment, the distance on screen from the start of its line to the start of the segment: the phase
+    /// of the dash pattern, so a line drawn in several pieces keeps one pattern.
+    /// </summary>
+    public ReadOnlySpan<float> SegmentDashOffsets => SegDashOffset.AsSpan(0, SegmentCount);
+
     /// <summary>Three floats per label: x, y (top left after the offset) and font size.</summary>
     public ReadOnlySpan<float> Labels => LabelData.AsSpan(0, 3 * LabelCount);
 
@@ -202,6 +213,8 @@ public sealed class DrawList
         Array.Resize(ref SegColor, n);
         Array.Resize(ref SegItem, n);
         Array.Resize(ref SegRound, n);
+        Array.Resize(ref SegDash, n);
+        Array.Resize(ref SegDashOffset, n);
     }
 
     internal void EnsureLabels(int count)

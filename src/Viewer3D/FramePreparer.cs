@@ -358,20 +358,24 @@ public sealed class FramePreparer
     /// front of it or wholly behind, so the per piece order is right up to the length of a piece.
     /// </summary>
     void AddLine(DrawList list, in Projector p, LineItem line, int itemIndex)
-        => AddSegments(list, p, line.Start, line.End, line.Color.ToArgb(), line.Width, itemIndex, MaxLinePieces);
+        => AddSegments(list, p, line.Start, line.End, line.Color.ToArgb(), line.Width, itemIndex, MaxLinePieces,
+            dash: MathF.Max(line.Dash, 0));
 
     /// <summary>
     /// The segment from <paramref name="start"/> to <paramref name="end"/>, cut and split as a line; no piece gets a depth
-    /// below <paramref name="minDepth"/>.
+    /// below <paramref name="minDepth"/>. A <paramref name="dash"/> above 0 dashes it, with the phase of each piece taken
+    /// from its distance on screen to the projected start, so the pattern does not restart at every piece.
     /// </summary>
     void AddSegments(DrawList list, in Projector p, Vector3 start, Vector3 end, uint color, float width, int itemIndex,
-        int maxPieces, float minDepth = float.NegativeInfinity)
+        int maxPieces, float minDepth = float.NegativeInfinity, float dash = 0)
     {
         Vector3 d = end - start;
         float length2 = d.LengthSquared();
         if (length2 == 0)
             return;
         float length = MathF.Sqrt(length2);
+        float sx = 0, sy = 0;
+        bool hasStart = dash > 0 && p.ProjectView(p.ToView(start), out sx, out sy, out _);
 
         spans.Clear();
         spans.Add((0f, 1f));
@@ -426,7 +430,9 @@ public sealed class FramePreparer
                     if (k > 0) { ax -= ox; ay -= oy; }
                     if (k < pieces - 1) { bx += ox; by += oy; }
                 }
-                AddSegment(list, ax, ay, bx, by, width, color, itemIndex, false, MathF.Max((va.Z + vb.Z) / 2, minDepth));
+                float phase = hasStart ? MathF.Sqrt((ax - sx) * (ax - sx) + (ay - sy) * (ay - sy)) : 0;
+                AddSegment(list, ax, ay, bx, by, width, color, itemIndex, false, MathF.Max((va.Z + vb.Z) / 2, minDepth),
+                    dash, phase);
             }
         }
     }
@@ -450,7 +456,8 @@ public sealed class FramePreparer
         (spans, spansScratch) = (spansScratch, spans);
     }
 
-    static void AddSegment(DrawList list, float x1, float y1, float x2, float y2, float width, uint color, int item, bool rod, float depth)
+    static void AddSegment(DrawList list, float x1, float y1, float x2, float y2, float width, uint color, int item, bool rod, float depth,
+        float dash = 0, float dashOffset = 0)
     {
         int i = list.SegmentCount;
         list.EnsureSegments(i + 1);
@@ -461,6 +468,8 @@ public sealed class FramePreparer
         list.SegColor[i] = color;
         list.SegItem[i] = item;
         list.SegRound[i] = rod;
+        list.SegDash[i] = dash;
+        list.SegDashOffset[i] = dashOffset;
         list.SegmentCount = i + 1;
         list.AddCommand(DrawKind.Segment, i, depth);
     }

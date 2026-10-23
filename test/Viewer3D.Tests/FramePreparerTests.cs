@@ -389,4 +389,41 @@ public class FramePreparerTests
         Assert.Equal(1, list.TriangleCount);
         Assert.Equal(1, list.CommandCount);
     }
+
+    [Fact]
+    public void DashedLine_PreparesSamePiecesAsSolid()
+    {
+        var solid = new LineItem { Start = new Vector3(-1, 0, 0), End = new Vector3(1, 0.5f, 0) };
+        var dashed = new LineItem { Start = solid.Start, End = solid.End, Dash = 4 };
+
+        DrawList a = Prepare(solid);
+        DrawList b = Prepare(dashed);
+
+        Assert.Equal(a.SegmentCount, b.SegmentCount);
+        Assert.Equal(a.Segments.ToArray(), b.Segments.ToArray());
+        Assert.All(a.SegmentDashes.ToArray(), d => Assert.Equal(0, d));
+        Assert.All(b.SegmentDashes.ToArray(), d => Assert.Equal(4, d));
+    }
+
+    [Fact]
+    public void DashedLine_SecondPieceOffsetEqualsFirstPieceLength()
+    {
+        // The pattern runs along the whole line: each piece starts its dashes at its own distance from the line start,
+        // so the second piece goes on where the first one stopped (less the half pixel the pieces overlap by).
+        var line = new LineItem { Start = new Vector3(-1, -0.3f, 0), End = new Vector3(1, 0.6f, 0), Dash = 4 };
+
+        DrawList list = Prepare(line);
+
+        Assert.True(list.SegmentCount > 2);
+        ReadOnlySpan<float> s = list.Segments;
+        ReadOnlySpan<float> offsets = list.SegmentDashOffsets;
+        Assert.Equal(0, offsets[0]);
+        float firstLength = MathF.Sqrt((s[2] - s[0]) * (s[2] - s[0]) + (s[3] - s[1]) * (s[3] - s[1]));
+        Assert.Equal(firstLength - 1f, offsets[1], 1e-3f);
+        for (int i = 1; i < list.SegmentCount; i++)
+        {
+            float fromStart = MathF.Sqrt((s[5 * i] - s[0]) * (s[5 * i] - s[0]) + (s[5 * i + 1] - s[1]) * (s[5 * i + 1] - s[1]));
+            Assert.Equal(fromStart, offsets[i], 1e-3f);
+        }
+    }
 }

@@ -62,13 +62,15 @@ public static class Picker
     /// The front-most item under (<paramref name="x"/>, <paramref name="y"/>), or null. A translucent triangle (alpha below
     /// 255) gives way to an opaque item seen through it while that item is still inside the mesh, so the atom inside a
     /// translucent polyhedron can still be picked; once a back-facing triangle or an edge of the same mesh is reached,
-    /// whatever lies further behind is outside the mesh and the mesh itself is reported.
+    /// whatever lies further behind is outside the mesh and the mesh itself is reported. An item that is not
+    /// <see cref="SceneItem.Pickable"/> is passed through, as if it were not drawn.
     /// </summary>
     public static PickResult? Pick(DrawList list, float x, float y)
     {
         ArgumentNullException.ThrowIfNull(list);
         if (list.Scene is null)
             return null;
+        IReadOnlyList<SceneItem> items = list.Scene.Items;
         ReadOnlySpan<uint> commands = list.Commands;
         PickResult? translucent = null;
         int translucentItem = -1;
@@ -78,7 +80,7 @@ public static class Picker
             switch (DrawList.KindOf(commands[c]))
             {
                 case DrawKind.Triangle:
-                    if (HitTriangle(list.TriXY, 6 * i, x, y, out Vector3 w))
+                    if (items[list.TriItem[i]].Pickable && HitTriangle(list.TriXY, 6 * i, x, y, out Vector3 w))
                     {
                         if (list.TriItem[i] == translucentItem && FacesAway(list.TriXY, 6 * i))
                             return translucent;
@@ -94,16 +96,16 @@ public static class Picker
                     break;
                 case DrawKind.Circle:
                     float dx = x - list.CircleData[3 * i], dy = y - list.CircleData[3 * i + 1], r = list.CircleData[3 * i + 2];
-                    if (dx * dx + dy * dy <= r * r)
+                    if (dx * dx + dy * dy <= r * r && items[list.CircleItem[i]].Pickable)
                         return new PickResult(list.Scene.Items[list.CircleItem[i]], -1, default);
                     break;
                 case DrawKind.Segment:
-                    if (HitSegment(list.SegData, 5 * i, x, y))
+                    if (items[list.SegItem[i]].Pickable && HitSegment(list.SegData, 5 * i, x, y))
                         return list.SegItem[i] == translucentItem ? translucent
                             : new PickResult(list.Scene.Items[list.SegItem[i]], -1, default);
                     break;
                 case DrawKind.Ellipse:
-                    if (HitEllipse(list.EllipseData, DrawList.EllipseStride * i, x, y))
+                    if (items[list.EllipseItem[i]].Pickable && HitEllipse(list.EllipseData, DrawList.EllipseStride * i, x, y))
                         return new PickResult(list.Scene.Items[list.EllipseItem[i]], -1, default);
                     break;
             }

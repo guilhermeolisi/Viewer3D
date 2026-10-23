@@ -11,6 +11,12 @@ public abstract class SceneItem
 {
     /// <summary>Identifier reported back by picking. Not required to be unique; the owner decides what it means.</summary>
     public int Id { get; init; }
+
+    /// <summary>
+    /// Whether picking reports this item. False makes it transparent to the pointer: picking reports what lies under
+    /// it, as for an overlay drawn over the scene (a measurement, a guide line).
+    /// </summary>
+    public bool Pickable { get; init; } = true;
 }
 
 /// <summary>How <see cref="FramePreparer"/> lights the faces of a mesh.</summary>
@@ -190,6 +196,12 @@ public sealed class LineItem : SceneItem
 
     /// <summary>Width in device-independent pixels.</summary>
     public float Width { get; init; } = 1f;
+
+    /// <summary>
+    /// Length of the dashes and of the gaps between them, in device-independent pixels; 0 draws a solid line. The
+    /// pattern runs along the whole line, across the pieces it is drawn in.
+    /// </summary>
+    public float Dash { get; init; }
 }
 
 /// <summary>A text label anchored at a 3D point. Labels are always drawn on top of the scene.</summary>
