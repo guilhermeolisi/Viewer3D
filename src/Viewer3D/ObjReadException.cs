@@ -20,6 +20,9 @@ public enum ObjReadError
 
     /// <summary>The file has no faces to draw.</summary>
     Empty,
+
+    /// <summary>An animation (<see cref="ObjSequenceReader"/>) was given fewer than two files.</summary>
+    TooFewFrames,
 }
 
 /// <summary>A Wavefront OBJ file that <see cref="ObjReader"/> refused, with the reason and, when there is one, the line.</summary>
@@ -40,7 +43,10 @@ public sealed class ObjReadException : Exception
     /// <summary>The 1-based line of the problem, or 0 when it is not tied to a line.</summary>
     public int Line { get; }
 
-    /// <summary>For a limit that was passed: how many triangles, vertices or bytes the file has. Otherwise 0.</summary>
+    /// <summary>
+    /// For a limit that was passed: how many triangles, vertices or bytes the file has, or how many files an animation
+    /// was given. Otherwise 0.
+    /// </summary>
     public long Count { get; }
 
     /// <summary>For a limit that was passed: the limit. Otherwise 0.</summary>

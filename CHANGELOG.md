@@ -89,6 +89,9 @@
 - `Viewer3D.Avalonia`: `Viewer3DControl.Sequence`, `FrameIndex`, `IsPlaying`, `PlaybackRate` and `FrameChanged` play a
   sequence on the camera animation clock, painting the low detail frame while it plays; `CreateFrameRenderer` paints
   any frame to PNG from any thread.
+- `Viewer3D`: `ObjSequenceReader` reads a series of OBJ files (a list or every `*.obj` of a folder) as a
+  `SceneSequence`, in `NaturalOrder` of the names (`step_2` before `step_10`), summing the weight file by file; a file
+  refused carries its name, and fewer than two files is `ObjReadError.TooFewFrames`.
 - `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
   `--bench-sequence N` times a frame of a sequence of fluorite blocks.
 
