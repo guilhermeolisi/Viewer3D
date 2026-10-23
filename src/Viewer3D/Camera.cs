@@ -129,6 +129,24 @@ public sealed class Camera
     /// <summary>Centers the camera on the whole scene.</summary>
     public void Frame(Scene scene) => Frame(scene.Center, scene.Radius);
 
+    /// <summary>Orientation, target and view radius, the part of the camera that <see cref="CameraAnimation"/> moves.</summary>
+    public CameraState State => new(orientation, target, viewRadius);
+
+    /// <summary>
+    /// Sets orientation, target and view radius at once and raises <see cref="Changed"/> once, with the same
+    /// normalization and floor as the separate setters.
+    /// </summary>
+    public void Set(Quaternion orientation, Vector3 target, float viewRadius)
+    {
+        this.orientation = Quaternion.Normalize(orientation);
+        this.target = target;
+        this.viewRadius = MathF.Max(viewRadius, 1e-9f);
+        OnChanged();
+    }
+
+    /// <summary>Sets the state taken from <see cref="State"/> or from an animation.</summary>
+    public void Set(in CameraState state) => Set(state.Orientation, state.Target, state.ViewRadius);
+
     /// <summary>A copy with the same state and no subscribers.</summary>
     public Camera Clone() => new() { orientation = orientation, target = target, viewRadius = viewRadius, projection = projection };
 

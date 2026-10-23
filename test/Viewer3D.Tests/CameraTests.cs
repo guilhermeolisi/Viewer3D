@@ -184,4 +184,34 @@ public class CameraTests
         Assert.Equal(source.ViewRadius, target.ViewRadius);
         Assert.Equal(ProjectionKind.Perspective, target.Projection);
     }
+
+    [Fact]
+    public void Set_AppliesTheStateWithOneChanged_NormalizedAndFloored()
+    {
+        var camera = new Camera { Projection = ProjectionKind.Perspective };
+        int raised = 0;
+        camera.Changed += (_, _) => raised++;
+        var unnormalized = new Quaternion(0, 2, 0, 2);
+
+        camera.Set(unnormalized, new Vector3(1, 2, 3), -5);
+
+        Assert.Equal(1, raised);
+        Assert.Equal(Quaternion.Normalize(unnormalized), camera.Orientation);
+        Assert.Equal(new Vector3(1, 2, 3), camera.Target);
+        Assert.Equal(1e-9f, camera.ViewRadius);
+        Assert.Equal(ProjectionKind.Perspective, camera.Projection);
+    }
+
+    [Fact]
+    public void State_RoundTripsThroughSet()
+    {
+        var source = new Camera();
+        source.Orbit(40, -15);
+        source.Frame(new Vector3(-1, 0, 2), 4);
+        var copy = new Camera();
+
+        copy.Set(source.State);
+
+        Assert.Equal(source.State, copy.State);
+    }
 }
