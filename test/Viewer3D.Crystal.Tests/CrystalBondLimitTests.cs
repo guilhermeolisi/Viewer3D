@@ -7,8 +7,8 @@ public class CrystalBondLimitTests
     static readonly CrystalSceneBuilder Builder = new();
 
     /// <summary>
-    /// Celula cubica de 10 A com Si em (0,5; 0,5; 0,5), O a 1,6 A (x) e K a 3,0 A (y), e as ligacoes Si-O e K-Si dadas:
-    /// distancias escolhidas para os limites ficarem entre elas.
+    /// Cubic cell of 10 A with Si at (0.5, 0.5, 0.5), O at 1.6 A (x) and K at 3.0 A (y), and the Si-O and K-Si bonds
+    /// given: distances chosen so the limits fall between them.
     /// </summary>
     static CrystalStructure Trio(bool kAutomatic = true)
     {
@@ -57,7 +57,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void GlobalLimit_AtTheBondLength_KeepsIt()
     {
-        // Si-O = 1,6 A: o limite e fechado.
+        // Si-O = 1.6 A: the limit is inclusive.
         CrystalScene scene = Builder.Build(Trio(), Plain with { MaxBondLength = 1.6 });
 
         Assert.Equal([0], RodBonds(scene));
@@ -66,7 +66,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void ElementLimitZero_MeansNoBondsFromThatElement()
     {
-        // K "No bonds": some o K-Si, o Si-O fica.
+        // K "No bonds": the K-Si goes, the Si-O stays.
         CrystalScene scene = Builder.Build(Trio(), Plain, ElementLimit("K", 0));
 
         Assert.Equal([0], RodBonds(scene));
@@ -75,8 +75,8 @@ public class CrystalBondLimitTests
     [Fact]
     public void ElementLimit_OverridesTheGlobalOne()
     {
-        // O geral corta tudo acima de 1 A; a regra do Si (3,5) nao basta, porque cada ponta decide: o O e o K ficam
-        // com o geral. Com regras no Si e no O, o Si-O volta.
+        // The global limit cuts everything above 1 A; the Si rule (3.5) is not enough, because each end decides: O and K
+        // keep the global one. With rules on Si and O, the Si-O comes back.
         CrystalStructure s = Trio();
         CrystalAppearance both = ElementLimit("Si", 3.5) with
         {
@@ -92,7 +92,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void SiteLimit_OverridesTheElementOne()
     {
-        // Elemento O em 0 (sem ligacoes); o sitio do O (indice 1) devolve 2 A: o Si-O volta.
+        // Element O at 0 (no bonds); the O site (index 1) gives 2 A back: the Si-O returns.
         CrystalAppearance appearance = ElementLimit("O", 0) with
         {
             BySite = ImmutableDictionary<int, AtomStyle>.Empty.Add(1, new AtomStyle { MaxBondLength = 2.0 }),
@@ -106,8 +106,8 @@ public class CrystalBondLimitTests
     [Fact]
     public void Candidate_IsDrawnOnlyWhenBothEndsHaveALimit()
     {
-        // K-Si vira candidata (3,0 A). Sem limite nao entra; com limite so no K tambem nao (o Si e Automatic); com o
-        // geral, entra.
+        // K-Si becomes a candidate (3.0 A). With no limit it is left out; with a limit on K only, too (Si is
+        // automatic); with the global one, it is drawn.
         CrystalStructure s = Trio(kAutomatic: false);
 
         Assert.Equal([0], RodBonds(Builder.Build(s, Plain)));
@@ -126,7 +126,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void BondCutByTheLimit_MakesNoFadedNeighbor()
     {
-        // Fluorita com coordenacao completa: com limite 0, nenhuma ligacao e nenhuma esfera esmaecida.
+        // Fluorite with complete coordination: with limit 0, no bond and no faded sphere.
         CrystalStructure s = Fixtures.Fluorite();
         var options = new CrystalSceneOptions { ShowBoundaryAtoms = false, CompleteCoordination = true };
 
@@ -141,7 +141,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void Polyhedron_IsHiddenWhenAVertexFailsTheLimit()
     {
-        // Ca-F = 2,366 A: com 2,3 o cubo some, com 2,4 fica, e sem limite fica como sempre.
+        // Ca-F = 2.366 A: with 2.3 the cube goes, with 2.4 it stays, and with no limit it stays as always.
         CrystalStructure s = Fixtures.FluoriteWithCubes();
         var options = new CrystalSceneOptions { Style = CrystalStyle.Polyhedra, ShowBoundaryAtoms = false };
 
@@ -168,7 +168,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void WithoutLimits_ACandidateDoesNotChangeThePolyhedra()
     {
-        // Uma candidata na estrutura liga a conferencia dos limites; os vertices contam como automaticos e o cubo fica.
+        // A candidate in the structure turns the limit check on; the vertices count as automatic and the cube stays.
         CrystalStructure s = Fixtures.FluoriteWithCubes();
         s = s with { Bonds = [.. s.Bonds, new CrystalBond(4, 5, LatticeShift.Zero) { IsAutomatic = false }] };
         var options = new CrystalSceneOptions { Style = CrystalStyle.Polyhedra, ShowBoundaryAtoms = false };
@@ -182,7 +182,7 @@ public class CrystalBondLimitTests
     [Fact]
     public void Expansion_CopiesIsAutomatic()
     {
-        // Fluorita com as ligacoes do primeiro Ca dadas como candidatas: as dos outros tres Ca saem candidatas tambem.
+        // Fluorite with the bonds of the first Ca given as candidates: those of the other three Ca are candidates too.
         CrystalStructure s = Fixtures.Fluorite();
         var given = s.Bonds.Where(b => b.First == 0).Select(b => b with { IsAutomatic = false }).ToList();
         s = s with { Bonds = given };

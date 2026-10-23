@@ -4,7 +4,7 @@ public class CrystalSceneSphereTests
 {
     static readonly CrystalSceneBuilder Builder = new();
 
-    /// <summary>NaCl, Fm-3m, a = 5,64 A: Na em 4a, Cl em 4b. Na-Cl = a/2 = 2,82 A.</summary>
+    /// <summary>NaCl, Fm-3m, a = 5.64 A: Na in 4a, Cl in 4b. Na-Cl = a/2 = 2.82 A.</summary>
     const double NaClA = 5.64;
 
     static CrystalStructure NaCl()
@@ -30,7 +30,7 @@ public class CrystalSceneSphereTests
         => scene.Scene.Items.OfType<SphereItem>().Count(x => s.Atoms[scene.Lookup(x.Id)!.AtomIndex].Element == element);
 
     [Theory]
-    // Camadas em volta do Cl: 6 Na a a/2 = 2,82; 12 Cl a a/sqrt(2) = 3,99; 8 Na a a sqrt(3)/2 = 4,88; 6 Cl a a = 5,64.
+    // Shells around Cl: 6 Na at a/2 = 2.82; 12 Cl at a/sqrt(2) = 3.99; 8 Na at a sqrt(3)/2 = 4.88; 6 Cl at a = 5.64.
     [InlineData(2.9, 6, 1)]
     [InlineData(4.2, 6, 13)]
     [InlineData(5.0, 14, 13)]
@@ -49,7 +49,7 @@ public class CrystalSceneSphereTests
     [Fact]
     public void Sphere_AtTheShellDistance_KeepsTheShell()
     {
-        // O raio igual a distancia da camada (a/2) a inclui: o limite e fechado.
+        // A radius equal to the shell distance (a/2) includes it: the limit is inclusive.
         CrystalStructure s = NaCl();
 
         CrystalScene scene = Builder.Build(s, OnChlorine(NaClA / 2));
@@ -60,7 +60,8 @@ public class CrystalSceneSphereTests
     [Fact]
     public void Sphere_BondCrossingTheSurface_IsNotDrawn()
     {
-        // R = 4,2: o Cl central, 6 Na e 12 Cl. Cada Cl da segunda camada tem 2 Na dentro e 4 fora: so as 2 entram.
+        // R = 4.2: the central Cl, 6 Na and 12 Cl. Each Cl of the second shell has 2 Na inside and 4 outside: only the 2
+        // bonds inside are drawn.
         CrystalStructure s = NaCl();
 
         CrystalScene scene = Builder.Build(s, OnChlorine(4.2));
@@ -79,7 +80,7 @@ public class CrystalSceneSphereTests
     [Fact]
     public void Sphere_OffAnAtom_FindsTheNeighborsOfTheHole()
     {
-        // Fluorita, centro no buraco octaedrico (1/2, 1/2, 1/2): 8 F a a sqrt(3)/4 = 2,366 A e 6 Ca a a/2 = 2,73 A.
+        // Fluorite, center in the octahedral hole (1/2, 1/2, 1/2): 8 F at a sqrt(3)/4 = 2.366 A and 6 Ca at a/2 = 2.73 A.
         CrystalStructure s = Fixtures.Fluorite();
         var options = new CrystalSceneOptions
         {
@@ -100,7 +101,7 @@ public class CrystalSceneSphereTests
     [Fact]
     public void Sphere_FindsTheImageAcrossTheCellFace()
     {
-        // O atomo em x = 0,97 so entra pela imagem t = -1 (x = -0,03), a 0,8 A do centro em x = 0,05.
+        // The atom at x = 0.97 enters only through image t = -1 (x = -0.03), 0.8 A from the center at x = 0.05.
         var cell = new CrystalCell(10, 10, 10, 90, 90, 90);
         var s = new CrystalStructure(cell, [new CrystalAtom("O1", "O", 0.97, 0.5, 0.5)], []);
         var options = new CrystalSceneOptions
@@ -121,7 +122,8 @@ public class CrystalSceneSphereTests
     [Fact]
     public void SphereSpan_UsesTheReciprocalLength()
     {
-        // a = 10 A: |a*| = 0,1/A, e R = 6 alcanca 0,6 de cela. Com |a*| = 1 (o vetor unitario) a faixa iria de -6 a 6.
+        // a = 10 A: |a*| = 0.1/A, and R = 6 reaches 0.6 of a cell. With |a*| = 1 (the unit vector) the span would go from
+        // -6 to 6.
         CellBasis basis = new CrystalCell(10, 10, 10, 90, 90, 90).Basis();
 
         (double ra, _, _) = basis.ReciprocalLengths();
@@ -139,7 +141,7 @@ public class CrystalSceneSphereTests
 
         (double ra, double rb, double rc) = basis.ReciprocalLengths();
 
-        // |a*| = |b x c| / V, conferido pelos vetores da cela.
+        // |a*| = |b x c| / V, checked against the cell vectors.
         Assert.Equal(System.Numerics.Vector3.Cross(cell.BVector, cell.CVector).Length() / volume, ra, 5);
         Assert.Equal(System.Numerics.Vector3.Cross(cell.CVector, cell.AVector).Length() / volume, rb, 5);
         Assert.Equal(System.Numerics.Vector3.Cross(cell.AVector, cell.BVector).Length() / volume, rc, 5);
@@ -195,7 +197,7 @@ public class CrystalSceneSphereTests
     [Fact]
     public void Sphere_AboveTheCeiling_FallsBackToOneCell_AndWarns()
     {
-        // R = 30 A no NaCl: ~5000 imagens, acima do teto de 3000.
+        // R = 30 A in NaCl: ~5000 images, above the ceiling of 3000.
         CrystalStructure s = NaCl();
 
         CrystalScene scene = Builder.Build(s, OnChlorine(30));
@@ -222,8 +224,8 @@ public class CrystalSceneSphereTests
     [Fact]
     public void Sphere_PolyhedronAroundACenterInside_IsWhole()
     {
-        // Fluorita com os cubos de F: esfera de 0,5 A no Ca da origem so pega o Ca, e o cubo vem inteiro, com os 8 F
-        // esmaecidos.
+        // Fluorite with the F cubes: a sphere of 0.5 A on the Ca at the origin takes only the Ca, and the cube comes whole,
+        // with the 8 F faded.
         CrystalStructure s = Fixtures.FluoriteWithCubes();
 
         CrystalScene scene = Builder.Build(s, new CrystalSceneOptions
@@ -238,5 +240,27 @@ public class CrystalSceneSphereTests
         var faded = scene.Scene.Items.OfType<SphereItem>().Where(x => scene.Lookup(x.Id)!.IsCompletion).ToList();
         Assert.Equal(8, faded.Count);
         Assert.Equal(9, scene.AtomCount);
+    }
+
+    [Fact]
+    public void Sphere_DrawsTheBondsFromACenterInside_ToItsFadedVertices_AndNoOther()
+    {
+        // The faded vertices of a whole polyhedron are drawn before the bonds, so the 8 Ca-F rods of the cube are drawn
+        // (faded) with the bonds inside polyhedra shown; the F-Ca bonds from those vertices to the other Ca are not.
+        CrystalStructure s = Fixtures.FluoriteWithCubes();
+
+        CrystalScene scene = Builder.Build(s, new CrystalSceneOptions
+        {
+            Style = CrystalStyle.Polyhedra,
+            Clip = CrystalClip.Sphere,
+            SphereCenter = new FractionalPoint(0, 0, 0),
+            SphereRadius = 0.5,
+            ShowBondsInsidePolyhedra = true,
+        });
+
+        var rods = scene.Scene.Items.OfType<RodItem>().Select(r => scene.Lookup(r.Id)!).ToList();
+        Assert.Equal(8, rods.Count);
+        Assert.All(rods, r => Assert.True(r.IsCompletion));
+        Assert.All(rods, r => Assert.Equal("Ca", s.Atoms[r.AtomIndex].Element));
     }
 }
