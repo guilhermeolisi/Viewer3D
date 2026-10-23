@@ -45,6 +45,91 @@ public sealed record CrystalCell(double A, double B, double C, double Alpha, dou
 
     /// <summary>The basis matrix, computed once for a loop over many positions.</summary>
     internal CellBasis Basis() => CellBasis.Create(A, B, C, Alpha, Beta, Gamma);
+
+    /// <summary>
+    /// The cell of three edge vectors given in any Cartesian frame (a simulation box, the lattice of a trajectory): their
+    /// lengths and the angles between them. The cell keeps its own frame, a along x and b in the xy plane, so the vectors
+    /// are taken up to a rotation. Three vectors in left-handed order give the cell of a, b and -c, which holds the same
+    /// points with a right-handed basis. Coplanar vectors give a cell that is not <see cref="IsValid"/>.
+    /// </summary>
+    public static CrystalCell FromVectors(Vector3 a, Vector3 b, Vector3 c)
+        => LatticeFrame.Create([a.X, a.Y, a.Z, b.X, b.Y, b.Z, c.X, c.Y, c.Z]).Cell;
+}
+
+/// <summary>
+/// Three edge vectors in a Cartesian frame of their own, in double precision: the <see cref="CrystalCell"/> they make and
+/// the fractional coordinates of a Cartesian position in that frame, by the inverse of the matrix of the vectors as
+/// given. When the vectors are left-handed, c is reversed (and with it the third fractional coordinate), so the cell
+/// is right-handed and the points are the same.
+/// </summary>
+internal readonly struct LatticeFrame
+{
+    // Inversa da matriz de colunas a, b e c como vieram, linha por linha.
+    readonly double i00, i01, i02, i10, i11, i12, i20, i21, i22;
+
+    LatticeFrame(CrystalCell cell, bool reversed, double[] inverse)
+    {
+        Cell = cell;
+        Reversed = reversed;
+        (i00, i01, i02, i10, i11, i12, i20, i21, i22) =
+            (inverse[0], inverse[1], inverse[2], inverse[3], inverse[4], inverse[5], inverse[6], inverse[7], inverse[8]);
+        Valid = true;
+    }
+
+    // Vetores sem volume: a cela, que nao e valida, e nada mais.
+    LatticeFrame(CrystalCell cell) => Cell = cell;
+
+    /// <summary>False for vectors that are coplanar, too short or not finite.</summary>
+    public bool Valid { get; }
+
+    /// <summary>The cell of the vectors, right-handed.</summary>
+    public CrystalCell Cell { get; }
+
+    /// <summary>True when the vectors were left-handed and c was reversed.</summary>
+    public bool Reversed { get; }
+
+    /// <summary>The frame of a, b and c, nine numbers: the three components of a, then of b, then of c.</summary>
+    public static LatticeFrame Create(ReadOnlySpan<double> v)
+    {
+        double ax = v[0], ay = v[1], az = v[2], bx = v[3], by = v[4], bz = v[5], cx = v[6], cy = v[7], cz = v[8];
+        double la = Math.Sqrt(ax * ax + ay * ay + az * az);
+        double lb = Math.Sqrt(bx * bx + by * by + bz * bz);
+        double lc = Math.Sqrt(cx * cx + cy * cy + cz * cz);
+        // Determinante = a . (b x c), o volume com sinal.
+        double det = ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
+        bool reversed = det < 0;
+        double sign = reversed ? -1 : 1;
+        var cell = new CrystalCell(la, lb, lc,
+            Angle(bx, by, bz, sign * cx, sign * cy, sign * cz, lb, lc),
+            Angle(ax, ay, az, sign * cx, sign * cy, sign * cz, la, lc),
+            Angle(ax, ay, az, bx, by, bz, la, lb));
+        if (!double.IsFinite(det) || !cell.IsValid)
+            return new LatticeFrame(cell);
+        // Inversa pela adjunta: as linhas sao b x c, c x a e a x b sobre o determinante.
+        double[] inverse =
+        [
+            (by * cz - bz * cy) / det, (bz * cx - bx * cz) / det, (bx * cy - by * cx) / det,
+            (cy * az - cz * ay) / det, (cz * ax - cx * az) / det, (cx * ay - cy * ax) / det,
+            (ay * bz - az * by) / det, (az * bx - ax * bz) / det, (ax * by - ay * bx) / det,
+        ];
+        if (reversed)
+        {
+            inverse[6] = -inverse[6];
+            inverse[7] = -inverse[7];
+            inverse[8] = -inverse[8];
+        }
+        return new LatticeFrame(cell, reversed, inverse);
+    }
+
+    /// <summary>Fractional coordinates, in <see cref="Cell"/>, of a Cartesian position in the frame of the vectors.</summary>
+    public (double X, double Y, double Z) ToFractional(double x, double y, double z)
+        => (i00 * x + i01 * y + i02 * z, i10 * x + i11 * y + i12 * z, i20 * x + i21 * y + i22 * z);
+
+    static double Angle(double ux, double uy, double uz, double vx, double vy, double vz, double lu, double lv)
+    {
+        double cos = (ux * vx + uy * vy + uz * vz) / (lu * lv);
+        return Math.Acos(Math.Clamp(cos, -1, 1)) * 180 / Math.PI;
+    }
 }
 
 /// <summary>

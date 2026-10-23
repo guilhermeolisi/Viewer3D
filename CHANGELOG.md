@@ -92,6 +92,12 @@
 - `Viewer3D`: `ObjSequenceReader` reads a series of OBJ files (a list or every `*.obj` of a folder) as a
   `SceneSequence`, in `NaturalOrder` of the names (`step_2` before `step_10`), summing the weight file by file; a file
   refused carries its name, and fewer than two files is `ObjReadError.TooFewFrames`.
+- `Viewer3D.Crystal`: `CrystalTrajectory` holds the structures of a trajectory, one per frame, and builds them into a
+  `SceneSequence` (`ToSequence`, with the weight checked from the atom counts before building and frame by frame
+  after); a molecule without a cell moves inside one box around the whole trajectory, drawn without edges.
+  `CrystalBondFinder` finds bonds from the geometry (the Jmol criterion, d up to r1 + r2 + 0.45 angstrom, with no
+  metal-metal bond when the structure has another element). `CrystalCell.FromVectors` makes a cell from three edge
+  vectors in any orientation.
 - `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
   `--bench-sequence N` times a frame of a sequence of fluorite blocks.
 

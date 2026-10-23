@@ -82,6 +82,45 @@ public class CrystalCellTests
         Assert.Equal(Vector3.Zero, new CrystalCell(-1, 4, 4, 90, 90, 90).ToCartesian(0.5, 0.5, 0.5));
     }
 
+    [Fact]
+    public void FromVectors_GivesTheLengthsAndAngles_InAnyOrientation()
+    {
+        var cell = new CrystalCell(4, 5, 6, 80, 95, 110);
+        Quaternion turn = Quaternion.CreateFromYawPitchRoll(0.7f, -0.4f, 1.1f);
+
+        CrystalCell back = CrystalCell.FromVectors(Vector3.Transform(cell.AVector, turn), Vector3.Transform(cell.BVector, turn),
+            Vector3.Transform(cell.CVector, turn));
+
+        Assert.Equal(4, back.A, Tolerance);
+        Assert.Equal(5, back.B, Tolerance);
+        Assert.Equal(6, back.C, Tolerance);
+        Assert.Equal(80, back.Alpha, 1e-3);
+        Assert.Equal(95, back.Beta, 1e-3);
+        Assert.Equal(110, back.Gamma, 1e-3);
+    }
+
+    [Fact]
+    public void FromVectors_LeftHanded_ReversesC()
+    {
+        // a, b and -c are left-handed: the cell is the one of a, b and c, whose angles with c are 80 and 95 (100 and
+        // 85 with -c).
+        var cell = new CrystalCell(4, 5, 6, 80, 95, 110);
+
+        CrystalCell back = CrystalCell.FromVectors(cell.AVector, cell.BVector, -cell.CVector);
+
+        Assert.Equal(80, back.Alpha, 1e-3);
+        Assert.Equal(95, back.Beta, 1e-3);
+        Assert.Equal(110, back.Gamma, 1e-3);
+        Assert.True(back.IsValid);
+    }
+
+    [Fact]
+    public void FromVectors_Coplanar_IsNotValid()
+    {
+        Assert.False(CrystalCell.FromVectors(new Vector3(4, 0, 0), new Vector3(0, 5, 0), new Vector3(1, 1, 0)).IsValid);
+        Assert.False(CrystalCell.FromVectors(new Vector3(4, 0, 0), Vector3.Zero, new Vector3(0, 0, 6)).IsValid);
+    }
+
     static double Angle(Vector3 u, Vector3 v)
         => Math.Acos(Vector3.Dot(u, v) / (u.Length() * v.Length())) * 180 / Math.PI;
 }
