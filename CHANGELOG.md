@@ -82,6 +82,15 @@
   `TopLevel.RequestAnimationFrame`, at most 30 per second and by elapsed time, painting `LowDetailScene`; a drag, the
   wheel, a key, a camera change from elsewhere or leaving the visual tree stops them.
 - `Viewer3D.Sample`: `--export` also writes four turntable frames.
+- `Viewer3D`: `SceneSequence`, an animation made of ready scenes (a flipbook) with a duration per frame, `Once`, `Loop`
+  or `PingPong` (`SequenceRepeat`), optional low detail frames and the union of the bounds of every frame. Its `Weight`
+  (items plus mesh vertices) has a ceiling, `DefaultMaxWeight` = 4,000,000, measured at up to 128 managed bytes per
+  unit; past it the constructor throws `SceneSequenceTooLargeException`. `FrameFileName` names exported frames.
+- `Viewer3D.Avalonia`: `Viewer3DControl.Sequence`, `FrameIndex`, `IsPlaying`, `PlaybackRate` and `FrameChanged` play a
+  sequence on the camera animation clock, painting the low detail frame while it plays; `CreateFrameRenderer` paints
+  any frame to PNG from any thread.
+- `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
+  `--bench-sequence N` times a frame of a sequence of fluorite blocks.
 
 ## 0.1.0 - 10/17/2026
 

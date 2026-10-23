@@ -9,6 +9,9 @@
 //                                             cost ceiling (run in Release)
 //        Viewer3D.Sample --bench-obj 25000,100000 times the read and the frame of OBJ spheres of about those triangle
 //                                             counts, to check the OBJ ceiling (run in Release)
+//        Viewer3D.Sample --bench-sequence-memory N counts the bytes an animation frame holds per unit of weight, to
+//                                             set the sequence ceiling (run in Release)
+//        Viewer3D.Sample --bench-sequence N   times a frame of an animation of fluorite blocks of cost N (run in Release)
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -66,6 +69,20 @@ internal static class Program
                 ? [.. args[obj + 1].Split(',').Select(x => int.TryParse(x, out int c) ? c : 0).Where(c => c > 0)]
                 : [];
             ObjBench.Run(counts.Length > 0 ? counts : [25_000, 100_000, 250_000, 500_000]);
+            return 0;
+        }
+        int sequenceMemory = Array.IndexOf(args, "--bench-sequence-memory");
+        if (sequenceMemory >= 0)
+        {
+            builder.SetupWithoutStarting();
+            SequenceBench.RunMemory(sequenceMemory + 1 < args.Length && int.TryParse(args[sequenceMemory + 1], out int n) ? n : 2700);
+            return 0;
+        }
+        int sequence = Array.IndexOf(args, "--bench-sequence");
+        if (sequence >= 0)
+        {
+            builder.SetupWithoutStarting();
+            SequenceBench.RunTime(sequence + 1 < args.Length && int.TryParse(args[sequence + 1], out int n) ? n : 2700);
             return 0;
         }
         int export = Array.IndexOf(args, "--export");

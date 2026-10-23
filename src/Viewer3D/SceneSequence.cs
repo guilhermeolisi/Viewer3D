@@ -46,7 +46,9 @@ public sealed class SceneSequence
 {
     /// <summary>
     /// Default ceiling of <see cref="Weight"/>: items plus mesh vertices over all frames, low detail ones included.
-    /// Provisional until measured.
+    /// Measured with the sample's <c>--bench-sequence-memory 2700</c>: a unit holds from 36 managed bytes (an OBJ mesh)
+    /// to 128 (ellipsoids, the worst kind), so 4,000,000 units keep the frames under about 490 MiB, inside a budget of
+    /// 512 MiB.
     /// </summary>
     public const long DefaultMaxWeight = 4_000_000;
 

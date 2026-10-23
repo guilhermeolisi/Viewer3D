@@ -43,7 +43,7 @@ internal static class CostBench
     }
 
     /// <summary>The largest block, grown one axis at a time, whose cost stays under <paramref name="cost"/>, with that ceiling.</summary>
-    static CrystalSceneOptions Block(CrystalSceneBuilder builder, CrystalStructure structure, int cost)
+    internal static CrystalSceneOptions Block(CrystalSceneBuilder builder, CrystalStructure structure, int cost)
     {
         var options = new CrystalSceneOptions { MaxCost = cost };
         while (true)

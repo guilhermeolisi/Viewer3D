@@ -54,6 +54,24 @@ internal static class PolyhedronBench
         Report("spheres only", new Scene(spheres));
     }
 
+    /// <summary>The double-sided scene of <see cref="Run"/>: <paramref name="count"/> octahedra with their spheres.</summary>
+    internal static Scene DoubleSided(int count)
+    {
+        var items = new List<SceneItem>(8 * count);
+        int side = (int)Math.Ceiling(Math.Cbrt(count));
+        int id = 0;
+        for (int k = 0; k < count; k++)
+        {
+            var center = new Vector3(k % side, k / side % side, k / (side * side)) * 3f;
+            Vector3[] positions = [.. Octahedron.Select(v => center + v * 1.2f)];
+            items.Add(Mesh(id++, positions, new Rgba(70, 120, 200, 90), true));
+            items.Add(new SphereItem { Id = id++, Center = center, Radius = 0.3f, Color = new Rgba(200, 120, 60) });
+            foreach (Vector3 p in positions)
+                items.Add(new SphereItem { Id = id++, Center = p, Radius = 0.25f, Color = new Rgba(220, 40, 40) });
+        }
+        return new Scene(items);
+    }
+
     static MeshItem Mesh(int id, Vector3[] positions, Rgba color, bool doubleSided) => new()
     {
         Id = id,

@@ -240,6 +240,36 @@ viewer.StartTurntable(Vector3.UnitY, TimeSpan.FromSeconds(8));
 | ![Turntable, start](docs/images/turntable-0.png) | ![Turntable, 45 degrees](docs/images/turntable-1.png) | ![Turntable, 90 degrees](docs/images/turntable-2.png) | ![Turntable, 135 degrees](docs/images/turntable-3.png) |
 |---|---|---|---|
 
+## Animation
+
+A `SceneSequence` is a flipbook: a list of ready scenes, each shown for its own duration, played `Once`, in a `Loop`
+or `PingPong`. Playing only swaps the scene, so a frame costs what a still picture costs and nothing is built while it
+plays; build the frames on any thread, since scenes and sequences are immutable. Give it to `Viewer3DControl.Sequence`
+and the control paints `Frames[FrameIndex]` in place of `Scene`. `IsPlaying` starts and pauses (both it and
+`FrameIndex` bind two-way, and a `Once` playback sets `IsPlaying` back to false on its last frame), `PlaybackRate`
+scales the time, and `FrameChanged` reports each new frame. The clock is the one of the camera animation: at most 30
+frames per second, by elapsed time, nothing asked for while paused or outside the visual tree. A camera move does not
+stop the playback. Selection and picking follow the frame on screen, so keep the `Id` of an item the same from frame
+to frame. `LowDetailFrames` (one lighter scene per frame, optional) is painted while the animation plays or the camera
+moves. `FrameScene` frames the union of the bounds of every frame, so the view does not shake.
+
+```csharp
+var sequence = new SceneSequence(frames, TimeSpan.FromMilliseconds(50), SequenceRepeat.PingPong);
+viewer.Sequence = sequence;
+viewer.FrameScene();
+viewer.IsPlaying = true;
+```
+
+`CreateFrameRenderer(width, height)` takes a copy of the camera and the options and paints any frame to PNG from any
+thread, for exporting a film frame by frame; `SceneSequence.FrameFileName("frame", i, count)` names the files so they
+sort (`frame_0001.png`).
+
+Frames are all kept in memory, so a sequence has a ceiling: `Weight` counts the items plus the mesh vertices of every
+frame, and above `maxWeight` (default `DefaultMaxWeight`, 4,000,000) the constructor throws
+`SceneSequenceTooLargeException`. The sample's `--bench-sequence-memory 2700` measured from 36 managed bytes per unit
+(an OBJ mesh) to 128 (ellipsoids), so the default keeps the frames under about 490 MiB. A reader that builds frames
+one by one sums `WeightOf` as it goes and calls `CheckWeight`, so it refuses early.
+
 ## Theme colors
 
 The control reads these resources (a `Color` or a solid brush), with built-in light and dark defaults:
