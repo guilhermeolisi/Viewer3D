@@ -118,6 +118,11 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
   and `EnabledPolyhedra` choose what is drawn. Faces are ordered back to front per triangle, which is right for convex
   polyhedra that only share vertices, edges or faces. Against the 3000 ceiling a polyhedron counts as 8 spheres.
   Run `Viewer3D.Sample --bench-polyhedra N` in Release to time N octahedra.
+- **Bond length.** A bond is automatic (`IsAutomatic`, the owner's own criterion) or a candidate that only a length
+  limit draws. `CrystalSceneOptions.MaxBondLength`, and `AtomStyle.MaxBondLength` per element, site or atom over it,
+  set the longest bond each atom lets through (0: none); a bond is drawn when both of its atoms let it through, and
+  with no limit only the automatic ones are. The layer finds no bond itself: the candidates come from the owner. A
+  polyhedron is drawn only when its center-vertex pairs pass.
 - **Elements.** `ElementTable` has color and radius for Z 1 to 118: the Jmol colors as published by
   [pymatgen](https://github.com/materialsproject/pymatgen) (MIT), the metallic radius of pymatgen for metals and the
   covalent radius of Cordero et al. (Dalton Trans., 2008, 2832) for the other elements. Values without a reference

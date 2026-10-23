@@ -15,8 +15,8 @@ public static class CrystalBondExpansion
     /// image of an atom of site j whose distance equals one of the distances given for that pair within
     /// <paramref name="tolerance"/> angstrom. Matching the given distances, rather than a range or a bonding rule,
     /// reproduces whatever rule chose the given bonds, since symmetry keeps the distances. A bond already present, in
-    /// either direction, is not repeated; a new one takes the <see cref="CrystalBond.SourceIndex"/> of the given bond
-    /// with the same distance. Atoms with <see cref="CrystalAtom.SiteIndex"/> -1, and their bonds, are left as they are.
+    /// either direction, is not repeated; a new one takes the <see cref="CrystalBond.SourceIndex"/> and the
+    /// <see cref="CrystalBond.IsAutomatic"/> of the given bond with the same distance. Atoms with <see cref="CrystalAtom.SiteIndex"/> -1, and their bonds, are left as they are.
     /// </summary>
     public static IReadOnlyList<CrystalBond> ExtendToEquivalentAtoms(CrystalStructure structure, double tolerance = 1e-4)
     {
@@ -33,7 +33,7 @@ public static class CrystalBondExpansion
             present.Add(Key(bond.First, bond.Second, bond.Shift));
 
         // Distancias dadas por par de sitios, cada uma com a ligacao de origem.
-        var distances = new Dictionary<(int, int), List<(double Distance, int Source)>>();
+        var distances = new Dictionary<(int, int), List<(double Distance, int Source, bool Automatic)>>();
         foreach (CrystalBond bond in given)
         {
             if ((uint)bond.First >= (uint)atoms.Count || (uint)bond.Second >= (uint)atoms.Count)
@@ -42,10 +42,10 @@ public static class CrystalBondExpansion
             if (si < 0 || sj < 0)
                 continue;
             double d = Distance(basis, atoms[bond.First], atoms[bond.Second], bond.Shift);
-            if (!distances.TryGetValue((si, sj), out List<(double, int)>? list))
+            if (!distances.TryGetValue((si, sj), out List<(double, int, bool)>? list))
                 distances[(si, sj)] = list = [];
             if (!list.Exists(x => Math.Abs(x.Item1 - d) <= tolerance))
-                list.Add((d, bond.SourceIndex));
+                list.Add((d, bond.SourceIndex, bond.IsAutomatic));
         }
 
         var bySite = new Dictionary<int, List<int>>();
@@ -59,7 +59,7 @@ public static class CrystalBondExpansion
             members.Add(k);
         }
 
-        foreach (((int si, int sj), List<(double Distance, int Source)> list) in distances)
+        foreach (((int si, int sj), List<(double Distance, int Source, bool Automatic)> list) in distances)
         {
             if (!bySite.TryGetValue(si, out List<int>? firsts) || !bySite.TryGetValue(sj, out List<int>? seconds))
                 continue;
@@ -82,7 +82,7 @@ public static class CrystalBondExpansion
                                 int match = list.FindIndex(e => Math.Abs(e.Distance - d) <= tolerance);
                                 if (match < 0 || !present.Add(Key(p, q, shift)))
                                     continue;
-                                result.Add(new CrystalBond(p, q, shift) { SourceIndex = list[match].Source });
+                                result.Add(new CrystalBond(p, q, shift) { SourceIndex = list[match].Source, IsAutomatic = list[match].Automatic });
                             }
                 }
         }

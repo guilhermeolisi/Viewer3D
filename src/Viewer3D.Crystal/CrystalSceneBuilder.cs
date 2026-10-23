@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Numerics;
 
 namespace Viewer3D.Crystal;
@@ -148,6 +149,9 @@ public sealed class CrystalSceneBuilder
     /// <summary>The sphere of <see cref="CrystalClip.Sphere"/>, already checked.</summary>
     internal readonly record struct SphereClip(FractionalPoint Center, double Radius);
 
+    /// <summary>A bond this much longer than a length limit, in angstrom, still passes it.</summary>
+    const double LengthTolerance = 1e-4;
+
     /// <summary>An image this far outside the sphere, in angstrom, still counts as inside.</summary>
     const double SphereTolerance = 1e-4;
 
@@ -208,6 +212,8 @@ public sealed class CrystalSceneBuilder
         readonly AtomStyle[] atomStyle;
         readonly Rgba?[] elementRuleColor;
         readonly PolyhedronStyle[] polyhedronStyle;
+        readonly bool limits;
+        double[]? bondLength;
 
         public Context(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis, CrystalAppearance app)
         {
@@ -257,6 +263,7 @@ public sealed class CrystalSceneBuilder
             polyhedronStyle = new PolyhedronStyle[structure.Polyhedra.Count];
             for (int k = 0; k < polyhedronStyle.Length; k++)
                 polyhedronStyle[k] = app.ResolvePolyhedron(structure, k);
+            limits = HasLengthLimits(structure, options, app);
             thermal = options.Style is CrystalStyle.ThermalEllipsoids or CrystalStyle.PolyhedraWithEllipsoids;
             polyhedra = options.Style is CrystalStyle.Polyhedra or CrystalStyle.PolyhedraWithEllipsoids;
             shapes = new DisplacementShape[]?[atoms.Count];
@@ -527,6 +534,8 @@ public sealed class CrystalSceneBuilder
                     LatticeShift u = t + shift;
                     if (hidden.Contains((other, u)) || IsHidden(other, u))
                         continue;
+                    if (limits && !BondPasses(bond, atom, t, other, u))
+                        continue;
                     bool partnerDrawn = drawn.ContainsKey((other, u));
                     if (!partnerDrawn)
                     {
@@ -685,6 +694,66 @@ public sealed class CrystalSceneBuilder
             }
         }
 
+        /// <summary>
+        /// True when some length limit can change which bonds are drawn: a limit in the options or in an atom rule, or a
+        /// candidate bond. Without one, every bond and polyhedron is drawn as before the limits existed.
+        /// </summary>
+        static bool HasLengthLimits(CrystalStructure structure, CrystalSceneOptions options, CrystalAppearance app)
+        {
+            return options.MaxBondLength is not null || app.AtomDefault.MaxBondLength is not null || Any(app.ByElement)
+                || Any(app.BySite) || Any(app.ByGroup) || Any(app.ByAtom) || Any(app.ByImage)
+                || structure.Bonds.Any(b => !b.IsAutomatic);
+
+            static bool Any<TKey>(ImmutableDictionary<TKey, AtomStyle> rules) where TKey : notnull
+                => rules.Values.Any(s => s.MaxBondLength is not null);
+        }
+
+        /// <summary>The limit of an image: the one of its rules, else the one of the options; null is no limit.</summary>
+        double? LimitOf(int atom, LatticeShift t)
+            => Style(atom, t).MaxBondLength is { } own && !double.IsNaN(own) ? own
+                : options.MaxBondLength is { } all && !double.IsNaN(all) ? all : null;
+
+        /// <summary>Whether one end lets a bond of this length through (<see cref="CrystalSceneOptions.MaxBondLength"/>).</summary>
+        static bool Lets(double? limit, bool automatic, double length)
+            => limit is { } l ? length <= l + LengthTolerance : automatic;
+
+        bool BondPasses(int bond, int atom, LatticeShift t, int other, LatticeShift u)
+        {
+            bool automatic = structure.Bonds[bond].IsAutomatic;
+            bondLength ??= BondLengths();
+            double length = bondLength[bond];
+            return Lets(LimitOf(atom, t), automatic, length) && Lets(LimitOf(other, u), automatic, length);
+        }
+
+        /// <summary>Every center-vertex pair of one copy passes, the vertices counting as automatic bonds.</summary>
+        bool VerticesPass(int center, LatticeShift t, (int Atom, LatticeShift Image)[] vertices)
+        {
+            double? centerLimit = LimitOf(center, t);
+            Reduced c = reduced[center];
+            foreach ((int atom, LatticeShift u) in vertices)
+            {
+                Reduced v = reduced[atom];
+                double length = basis.Distance(v.X + u.A - c.X - t.A, v.Y + u.B - c.Y - t.B, v.Z + u.C - c.Z - t.C);
+                if (!Lets(centerLimit, true, length) || !Lets(LimitOf(atom, u), true, length))
+                    return false;
+            }
+            return true;
+        }
+
+        double[] BondLengths()
+        {
+            IReadOnlyList<CrystalBond> bonds = structure.Bonds;
+            var lengths = new double[bonds.Count];
+            int count = structure.Atoms.Count;
+            for (int k = 0; k < bonds.Count; k++)
+            {
+                CrystalBond b = bonds[k];
+                if ((uint)b.First < (uint)count && (uint)b.Second < (uint)count)
+                    lengths[k] = Distance(b.First, b.Second, ReducedShift(b));
+            }
+            return lengths;
+        }
+
         string LabelOf(int atom, AtomLabelText text)
         {
             IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
@@ -822,6 +891,8 @@ public sealed class CrystalSceneBuilder
                         PolyhedronVertex v = p.Vertices[i];
                         vertices[i] = (v.Atom, t + reduced[v.Atom].Floor + v.Shift - reduced[p.Center].Floor);
                     }
+                    if (limits && !VerticesPass(p.Center, t, vertices))
+                        continue;
                     result.Add(new PolyhedronInstance(k, p.Center, t, vertices));
                 }
             }

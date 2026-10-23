@@ -96,6 +96,12 @@ public sealed record CrystalBond(int First, int Second, LatticeShift Shift)
 {
     /// <summary>Index of the bond in the owner's own data, for reporting a selection back. -1 when unused.</summary>
     public int SourceIndex { get; init; } = -1;
+
+    /// <summary>
+    /// True for a bond of the owner's own criterion, drawn with no length limit; false for a candidate that only a
+    /// length limit draws (<see cref="CrystalSceneOptions.MaxBondLength"/>, <see cref="AtomStyle.MaxBondLength"/>).
+    /// </summary>
+    public bool IsAutomatic { get; init; } = true;
 }
 
 /// <summary>One vertex of a <see cref="CrystalPolyhedron"/>: an atom, translated as the second atom of a bond.</summary>

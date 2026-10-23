@@ -63,6 +63,12 @@ public sealed record AtomStyle
     /// <summary>A ring of this color around the sphere (<see cref="SphereItem.Halo"/>), to make the atom stand out.</summary>
     public Rgba? Halo { get; init; }
 
+    /// <summary>
+    /// Longest bond drawn from this atom, in angstrom, over <see cref="CrystalSceneOptions.MaxBondLength"/>; 0 draws no
+    /// bond from it. See <see cref="CrystalSceneOptions.MaxBondLength"/> for the rule.
+    /// </summary>
+    public double? MaxBondLength { get; init; }
+
     /// <summary>This style over <paramref name="lower"/>: each field is this one's when set, the lower one's when not.</summary>
     public AtomStyle Over(AtomStyle lower) => new()
     {
@@ -73,6 +79,7 @@ public sealed record AtomStyle
         ShowLabel = ShowLabel ?? lower.ShowLabel,
         LabelText = LabelText ?? lower.LabelText,
         Halo = Halo ?? lower.Halo,
+        MaxBondLength = MaxBondLength ?? lower.MaxBondLength,
     };
 }
 

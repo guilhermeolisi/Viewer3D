@@ -88,6 +88,16 @@ public sealed record CrystalSceneOptions
     /// </summary>
     public double SphereRadius { get; init; } = 6;
 
+    /// <summary>
+    /// Longest bond drawn, in angstrom; null (Automatic) draws the bonds marked <see cref="CrystalBond.IsAutomatic"/>
+    /// and no other. A bond is drawn when each of its two atoms lets it through: the limit of an atom is its
+    /// <see cref="AtomStyle.MaxBondLength"/> when a rule sets one, else this one; with no limit the atom lets through
+    /// the automatic bonds, and with a limit every bond no longer than it (0 lets none through). The vertices of a
+    /// polyhedron count as automatic bonds of its center, and a polyhedron is drawn only when every center-vertex pair
+    /// passes, so a limit never adds vertices to a polyhedron.
+    /// </summary>
+    public double? MaxBondLength { get; init; }
+
     /// <summary>Also draws the atoms on the far faces, edges and corners of the block of cells.</summary>
     public bool ShowBoundaryAtoms { get; init; } = true;
 
