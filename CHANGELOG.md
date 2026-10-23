@@ -91,7 +91,8 @@
   any frame to PNG from any thread.
 - `Viewer3D`: `ObjSequenceReader` reads a series of OBJ files (a list or every `*.obj` of a folder) as a
   `SceneSequence`, in `NaturalOrder` of the names (`step_2` before `step_10`), summing the weight file by file; a file
-  refused carries its name, and fewer than two files is `ObjReadError.TooFewFrames`.
+  refused carries its name, at the start of the message and in `ObjReadException.FileName`, and fewer than two files
+  is `ObjReadError.TooFewFrames`.
 - `Viewer3D.Crystal`: `CrystalTrajectory` holds the structures of a trajectory, one per frame, and builds them into a
   `SceneSequence` (`ToSequence`, with the weight checked from the atom counts before building and frame by frame
   after); a molecule without a cell moves inside one box around the whole trajectory, drawn without edges.

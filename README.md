@@ -274,7 +274,7 @@ one by one sums `WeightOf` as it goes and calls `CheckWeight`, so it refuses ear
 
 `ObjSequenceReader.Read(paths, frameDuration)` and `ReadFolder(folder, frameDuration)` read a series of OBJ files, one
 per frame, sorted by `NaturalOrder` of the file names, whatever their folders (`step_2.obj` before `step_10.obj`). Each file keeps the limits of `ObjReader`, a
-file that is refused names itself at the start of the message, and fewer than two files is
+file that is refused names itself at the start of the message and in `ObjReadException.FileName`, and fewer than two files is
 `ObjReadError.TooFewFrames`. Give the meshes the same names and order in every file, so their ids stay the same.
 
 `Viewer3D.Crystal` reads two trajectory formats into a `CrystalTrajectory`, one `CrystalStructure` per frame:

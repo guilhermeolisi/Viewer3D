@@ -29,13 +29,21 @@ public enum ObjReadError
 public sealed class ObjReadException : Exception
 {
     /// <summary>Creates the exception.</summary>
-    public ObjReadException(ObjReadError reason, string message, int line = 0, long count = 0, long limit = 0) : base(message)
+    public ObjReadException(ObjReadError reason, string message, int line = 0, long count = 0, long limit = 0,
+        string? fileName = null) : base(message)
     {
         Reason = reason;
         Line = line;
         Count = count;
         Limit = limit;
+        FileName = fileName;
     }
+
+    /// <summary>
+    /// The name of the refused file (without its folder) when <see cref="ObjSequenceReader"/> read it among the frames of
+    /// an animation; null for a single file read by <see cref="ObjReader"/>, whose caller already knows it.
+    /// </summary>
+    public string? FileName { get; }
 
     /// <summary>Why the file was refused.</summary>
     public ObjReadError Reason { get; }

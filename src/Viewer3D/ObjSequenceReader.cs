@@ -45,7 +45,8 @@ public static class ObjSequenceReader
             }
             catch (ObjReadException e)
             {
-                throw new ObjReadException(e.Reason, Path.GetFileName(files[k]) + ": " + e.Message, e.Line, e.Count, e.Limit);
+                string name = Path.GetFileName(files[k]);
+                throw new ObjReadException(e.Reason, name + ": " + e.Message, e.Line, e.Count, e.Limit, name);
             }
             weight += SceneSequence.WeightOf(frames[k]);
             SceneSequence.CheckWeight(weight, maxWeight);
