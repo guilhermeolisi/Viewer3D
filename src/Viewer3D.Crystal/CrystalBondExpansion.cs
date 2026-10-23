@@ -89,6 +89,48 @@ public static class CrystalBondExpansion
         return result;
     }
 
+    /// <summary>
+    /// The sources that draw the same bonds as <paramref name="source"/> after <see cref="ExtendToEquivalentAtoms"/>:
+    /// the <see cref="CrystalBond.SourceIndex"/> of every given bond between the same two sites, in either direction, at
+    /// the same distance within <paramref name="tolerance"/> angstrom. The expansion gives every image of such a bond the
+    /// source of whichever of them it met first, so removing one of them alone would remove some images and not others.
+    /// A source of -1, one not in <see cref="CrystalStructure.Bonds"/>, or one whose atoms have no site, gives itself.
+    /// </summary>
+    public static IReadOnlySet<int> EquivalentSources(CrystalStructure structure, int source, double tolerance = 1e-4)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        var result = new HashSet<int> { source };
+        if (source < 0)
+            return result;
+        IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+        CellBasis basis = structure.Cell.Basis();
+        CrystalBond? first = null;
+        foreach (CrystalBond bond in structure.Bonds)
+        {
+            if (bond.SourceIndex == source && (uint)bond.First < (uint)atoms.Count && (uint)bond.Second < (uint)atoms.Count)
+            {
+                first = bond;
+                break;
+            }
+        }
+        if (first is null || !basis.Valid)
+            return result;
+        (int si, int sj) = (atoms[first.First].SiteIndex, atoms[first.Second].SiteIndex);
+        if (si < 0 || sj < 0)
+            return result;
+        double d = Distance(basis, atoms[first.First], atoms[first.Second], first.Shift);
+        foreach (CrystalBond bond in structure.Bonds)
+        {
+            if (bond.SourceIndex < 0 || (uint)bond.First >= (uint)atoms.Count || (uint)bond.Second >= (uint)atoms.Count)
+                continue;
+            int a = atoms[bond.First].SiteIndex, b = atoms[bond.Second].SiteIndex;
+            if (((a == si && b == sj) || (a == sj && b == si))
+                && Math.Abs(Distance(basis, atoms[bond.First], atoms[bond.Second], bond.Shift) - d) <= tolerance)
+                result.Add(bond.SourceIndex);
+        }
+        return result;
+    }
+
     /// <summary>The same key for a bond and for its reverse.</summary>
     static (int, int, LatticeShift) Key(int first, int second, LatticeShift shift)
         => first < second || (first == second && Positive(shift)) ? (first, second, shift) : (second, first, LatticeShift.Zero - shift);

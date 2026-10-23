@@ -234,6 +234,14 @@ public sealed record CrystalAppearance
     /// <summary>Rules by bond index in <see cref="CrystalStructure.Bonds"/>.</summary>
     public ImmutableDictionary<int, BondStyle> ByBond { get; init; } = ImmutableDictionary<int, BondStyle>.Empty;
 
+    /// <summary>
+    /// Bonds left out of the drawing by <see cref="CrystalBond.SourceIndex"/>: every bond with one of these sources goes,
+    /// in every image, and leaves no faded neighbor behind. A source of -1 is never removed. Unlike a <c>Visible</c> rule,
+    /// <see cref="ShowAll"/> keeps them. <see cref="CrystalBondExpansion.EquivalentSources"/> gives the sources that
+    /// draw the same bonds as one.
+    /// </summary>
+    public ImmutableHashSet<int> RemovedBonds { get; init; } = ImmutableHashSet<int>.Empty;
+
     /// <summary>The rule of every polyhedron.</summary>
     public PolyhedronStyle PolyhedronDefault { get; init; } = PolyhedronStyle.Empty;
 
@@ -317,7 +325,7 @@ public sealed record CrystalAppearance
 
     /// <summary>
     /// The same appearance with every <c>Visible</c> rule taken out and the atoms, rods, cell, polyhedron centers and
-    /// annotations shown; colors, opacities, halos and sizes stay.
+    /// annotations shown; colors, opacities, halos and sizes stay, and so do the <see cref="RemovedBonds"/>.
     /// </summary>
     public CrystalAppearance ShowAll() => this with
     {

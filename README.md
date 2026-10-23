@@ -161,7 +161,10 @@ rules. Each field of a style is nullable, and the most specific level that sets 
 `ShowAtoms`, `ShowBonds`, `ShowCell` and `ShowPolyhedronCenters` switch whole groups off; `ColorScheme` colors the
 atoms by element, site or occupancy (the last two with `CrystalScene.ColorLegend`). A hidden atom takes its label and
 its rods with it; the polyhedra it belongs to stay whole. `CrystalScene.HiddenAtomCount` counts the hidden atoms of
-the block, and `ShowAll()` makes everything visible again and keeps the colors. Without an appearance, or with
+the block, and `ShowAll()` makes everything visible again and keeps the colors. `RemovedBonds` leaves bonds out by
+their `CrystalBond.SourceIndex`, every image and its faded neighbor with them, and `ShowAll()` keeps them; after
+`CrystalBondExpansion`, remove the whole `CrystalBondExpansion.EquivalentSources` of a bond, since its images carry
+the source of whichever equivalent bond came first. Without an appearance, or with
 `CrystalAppearance.Default`, the builder gives the same scene as before.
 
 ![Fluorite, polyhedra only](docs/images/crystal-polyhedra-only.png)

@@ -52,6 +52,10 @@
   scheme with the groups in the color legend. `AtomStyle.Halo` rings an atom. `CrystalStructure.Annotations` are scene
   items drawn over the structure (lines, arrows, planes, labels), picked as `CrystalItemKind.Annotation` with
   `CrystalItemInfo.AnnotationIndex`, and hidden by `CrystalAppearance.ShowAnnotations`.
+- `Viewer3D.Crystal`: `CrystalAppearance.RemovedBonds` leaves bonds out of the drawing by `CrystalBond.SourceIndex`,
+  every image together and with no faded neighbor left behind; `ShowAll()` keeps them.
+  `CrystalBondExpansion.EquivalentSources` gives the sources that draw the same bonds after the expansion (the same two
+  sites, either direction, the same distance), so removing one removes them all.
 
 ## 0.1.0 - 10/17/2026
 

@@ -525,6 +525,7 @@ public sealed class CrystalSceneBuilder
             origins.AddRange(own);
             origins.AddRange(boundary);
             var bondsByAtom = BondsByAtom();
+            bool removed = app.RemovedBonds.Count > 0;
             foreach ((int atom, LatticeShift t) in origins)
             {
                 if (!bondsByAtom.TryGetValue(atom, out List<(int Bond, int Other, LatticeShift Shift)>? list))
@@ -533,6 +534,9 @@ public sealed class CrystalSceneBuilder
                 {
                     LatticeShift u = t + shift;
                     if (hidden.Contains((other, u)) || IsHidden(other, u))
+                        continue;
+                    // Ligacao apagada: antes do par e da esfera esmaecida, para nao reservar um nem deixar a outra.
+                    if (removed && structure.Bonds[bond].SourceIndex is int source && source >= 0 && app.RemovedBonds.Contains(source))
                         continue;
                     if (limits && !BondPasses(bond, atom, t, other, u))
                         continue;
