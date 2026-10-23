@@ -4,7 +4,7 @@ public class CrystalTrajectoryTests
 {
     static readonly TimeSpan Tenth = TimeSpan.FromMilliseconds(100);
 
-    // Agua em angstrom: O na origem, H a 0,9572 A com H-O-H de 104,52 graus, deslocada por (dx, 0, 0).
+    // Water in angstrom: O at the origin, H at 0.9572 A with H-O-H of 104.52 degrees, moved by (dx, 0, 0).
     static CartesianFrame Water(double dx)
     {
         double half = 104.52 / 2 * Math.PI / 180, oh = 0.9572;

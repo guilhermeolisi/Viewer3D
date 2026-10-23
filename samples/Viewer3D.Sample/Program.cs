@@ -108,6 +108,13 @@ internal static class Program
                 turning.Camera.Set(turntable.StateAt(TimeSpan.FromSeconds(i)));
                 File.WriteAllBytes(Path.Combine(dir, $"turntable-{i}.png"), turning.RenderToPng(320, 240));
             }
+            // Four frames of the thermal motion loop, a quarter of the loop apart, named as exported frames are.
+            Viewer3DControl moving = Scenes.ThermalMotionCrystal();
+            for (int i = 0; i < 4; i++)
+            {
+                moving.FrameIndex = i * moving.Sequence!.Frames.Count / 4;
+                File.WriteAllBytes(Path.Combine(dir, SceneSequence.FrameFileName("thermal-motion", i, 4)), moving.RenderToPng(320, 240));
+            }
             Console.WriteLine($"Images written to {Path.GetFullPath(dir)}");
             return 0;
         }
@@ -279,6 +286,40 @@ internal static class Scenes
         viewer.Camera!.LookAlong(-structure.Cell.AVector, structure.Cell.CVector);
         viewer.Camera.Orbit(-35, -25);
         viewer.Camera.Frame(scene.Scene);
+        return viewer;
+    }
+
+    /// <summary>
+    /// The fluorite of <see cref="Crystal"/> in thermal ellipsoids, with made-up displacement tensors (Ca isotropic,
+    /// 0.008 square angstrom; F longer along the cube diagonal it sits on), playing the <see cref="ThermalMotion"/> loop
+    /// at three times its amplitude so the motion shows at a small size.
+    /// </summary>
+    public static Viewer3DControl ThermalMotionCrystal()
+    {
+        CrystalStructure fluorite = Fluorite();
+        double[] ca = [0.008, 0.008, 0.008, 0, 0, 0];
+        CrystalAtom[] atoms = [.. fluorite.Atoms.Select(atom =>
+        {
+            if (atom.Element == "Ca")
+                return atom with { Displacements = [new AtomDisplacement(null, ca)] };
+            // U = 0.010 I + 0.004 n n^T, n the cube diagonal from the F toward the cell center (signs from the position).
+            double sx = atom.X < 0.5 ? 1 : -1, sy = atom.Y < 0.5 ? 1 : -1, sz = atom.Z < 0.5 ? 1 : -1;
+            const double iso = 0.010, along = 0.004 / 3;
+            return atom with
+            {
+                Displacements = [new AtomDisplacement(null, [iso + along, iso + along, iso + along, along * sx * sy, along * sx * sz, along * sy * sz])],
+            };
+        })];
+        CrystalStructure structure = fluorite with { Atoms = atoms };
+        var options = new CrystalSceneOptions { Style = CrystalStyle.ThermalEllipsoids, IncludeLabels = false };
+        var builder = new CrystalSceneBuilder();
+        SceneSequence sequence = ThermalMotion.BuildSequence(builder, structure, options,
+            motion: new ThermalMotionOptions { Amplitude = 3, FramesPerPeriod = 24 }, lowDetail: true);
+        CrystalScene rest = builder.Build(structure, options);
+        var viewer = new Viewer3DControl { Sequence = sequence, AxisDirections = rest.Axes };
+        viewer.Camera!.LookAlong(-structure.Cell.AVector, structure.Cell.CVector);
+        viewer.Camera.Orbit(-35, -25);
+        viewer.Camera.Frame(rest.Scene);
         return viewer;
     }
 

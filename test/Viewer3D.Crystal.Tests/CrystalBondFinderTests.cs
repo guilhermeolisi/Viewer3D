@@ -86,7 +86,7 @@ public class CrystalBondFinderTests
     [Fact]
     public void Water_WithoutCell_HasTwoOH_AndNoHH()
     {
-        // Agua: O-H 0,9572 A, H-O-H 104,52 graus, H-H 1,514 A (0,31 + 0,31 + 0,45 = 1,07 nao liga).
+        // Water: O-H 0.9572 A, H-O-H 104.52 degrees, H-H 1.514 A (0.31 + 0.31 + 0.45 = 1.07, no bond).
         var box = new CrystalCell(10, 10, 10, 90, 90, 90);
         double half = 104.52 / 2 * Math.PI / 180;
         CrystalAtom[] atoms =

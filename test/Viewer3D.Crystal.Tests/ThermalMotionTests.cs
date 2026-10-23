@@ -4,14 +4,14 @@ namespace Viewer3D.Crystal.Tests;
 
 public class ThermalMotionTests
 {
-    // Tensor anisotropico com termos cruzados, positivo definido (autovalores ~0,0083, 0,0143, 0,0274 A^2).
+    // Anisotropic tensor with cross terms, positive definite (eigenvalues about 0.0083, 0.0143, 0.0274 A^2).
     static readonly double[] Anisotropic = [0.020, 0.012, 0.018, 0.004, -0.003, 0.006];
 
     static CrystalStructure OneAtom(params double[]?[] tensors)
         => new(new CrystalCell(5, 5, 5, 90, 90, 90),
             [new CrystalAtom("X1", "Fe", 0.5, 0.5, 0.5) { Displacements = [.. tensors.Select(t => new AtomDisplacement(null, t))] }], []);
 
-    // Media de d d^T sobre o laco, em double a partir dos offsets em float: (11, 22, 33, 12, 13, 23).
+    // Mean of d d^T over the loop, in double from the float offsets: (11, 22, 33, 12, 13, 23).
     static double[] Covariance(Vector3[][] offsets, int atom)
     {
         var c = new double[6];
@@ -39,8 +39,9 @@ public class ThermalMotionTests
         double[] c = Covariance(offsets, 0);
 
         Assert.Equal(frames, offsets.Length);
-        // Exata na aritmetica (funcoes ortogonais em N >= 5 pontos): sobra o arredondamento a float, ~2,4e-7 k^2 tr(U)
-        // no pior caso; 1e-5 da margem de ~40x e fica quatro ordens abaixo de um sqrt(lambda) no lugar de sqrt(2 lambda).
+        // Exact in exact arithmetic (orthogonal functions on N >= 5 points): what is left is the rounding to float, about
+        // 2.4e-7 k^2 tr(U) at worst; 1e-5 leaves a margin of about 40 and stays four orders below sqrt(lambda) in place
+        // of sqrt(2 lambda).
         double trace = Anisotropic[0] + Anisotropic[1] + Anisotropic[2];
         for (int m = 0; m < 6; m++)
             Assert.InRange(Math.Abs(c[m] - k * k * Anisotropic[m]), 0, 1e-5 * k * k * trace);
@@ -147,8 +148,8 @@ public class ThermalMotionTests
             new CrystalSceneOptions(), cancellationToken: TestContext.Current.CancellationToken));
     }
 
-    // NaCl, a = 5,64 A, Na no canto (imagens de borda em todas as faces), U isotropico de 0,012 A^2 no Na e anisotropico
-    // no Cl, todas as ligacoes Na-Cl.
+    // NaCl, a = 5.64 A, Na on the corner (boundary images on every face), isotropic U of 0.012 A^2 on Na and anisotropic
+    // on Cl, every Na-Cl bond.
     static CrystalStructure Salt()
     {
         double[] na = [0.012, 0.012, 0.012, 0, 0, 0];
@@ -171,8 +172,8 @@ public class ThermalMotionTests
     [InlineData(CrystalStyle.ThermalEllipsoids)]
     public void BuildSequence_EveryFrameHasTheItemsOfTheSceneAtRest_EachAtomMovedByItsOffset(CrystalStyle style)
     {
-        // Interacao com o builder de verdade: Na no canto com ShowBoundaryAtoms, o caso em que mover a posicao (e nao o
-        // ponto desenhado) faria imagens de borda sumirem e os Id mudarem.
+        // Interaction with the real builder: Na on the corner with ShowBoundaryAtoms, where moving the position (and not
+        // the drawn point) would make boundary images vanish and the ids change.
         var builder = new CrystalSceneBuilder();
         CrystalStructure salt = Salt();
         var options = new CrystalSceneOptions { Style = style, ShowBoundaryAtoms = true, CompleteCoordination = true };
@@ -198,13 +199,13 @@ public class ThermalMotionTests
             foreach ((int id, Vector3 center) in centers)
             {
                 int atom = rest.Lookup(id)!.AtomIndex;
-                // 1e-5 A: o ulp de float perto de 6 A e ~5e-7, a soma de dois vetores em float fica abaixo de 2e-6.
+                // 1e-5 A: the float ulp near 6 A is about 5e-7; the sum of two float vectors stays below 2e-6.
                 Assert.InRange(Vector3.Distance(center - restCenters[id], offsets[f][atom]), 0, 1e-5f);
             }
         }
     }
 
-    // Centro de cada esfera e elipsoide de atomo, pelo Id.
+    // Center of each atom sphere and ellipsoid, by id.
     static Dictionary<int, Vector3> Centers(Scene scene)
         => scene.Items.Select(i => i switch
             {
@@ -223,8 +224,8 @@ public class ThermalMotionTests
         var options = new CrystalSceneOptions { ShowBoundaryAtoms = true };
         var motion = new ThermalMotionOptions { FramesPerPeriod = 20 };
         long frameWeight = SceneSequence.WeightOf(builder.Build(salt, options).Scene);
-        // O teto e o que a estimativa (so as esferas, 20 quadros) deixa passar; os bastoes e a cela fazem o peso
-        // montado passar dele antes do ultimo quadro.
+        // The ceiling is what the estimate (spheres only, 20 frames) lets through; the rods and the cell make the built
+        // weight pass it before the last frame.
         long limit = builder.Estimate(salt, options, null).Atoms * 20L;
         Assert.True(frameWeight * 20 > limit);
 

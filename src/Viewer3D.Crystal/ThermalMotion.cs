@@ -65,7 +65,7 @@ public static class ThermalMotion
         var random = new Random(options.Seed);
         for (int i = 0; i < atoms.Count; i++)
         {
-            // Sorteio para todo atomo, parado ou nao: a fase de um atomo nao depende de o anterior ter tensor.
+            // Drawn for every atom, moving or not, so the phases of an atom do not depend on the atoms before it.
             double psi = 2 * Math.PI * random.NextDouble();
             double psi2 = 2 * Math.PI * random.NextDouble();
             int[] order = Orders[random.Next(Orders.Length)];
@@ -144,7 +144,7 @@ public static class ThermalMotion
         return new SceneSequence(scenes, motion.Period / n, SequenceRepeat.Loop, lighter, maxWeight);
     }
 
-    // As seis ordens das tres funcoes do laco.
+    // The six orders of the three functions of the loop.
     static readonly int[][] Orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
     static void Check(ThermalMotionOptions options)

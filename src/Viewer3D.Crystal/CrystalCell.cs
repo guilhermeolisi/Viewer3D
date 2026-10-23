@@ -64,7 +64,7 @@ public sealed record CrystalCell(double A, double B, double C, double Alpha, dou
 /// </summary>
 internal readonly struct LatticeFrame
 {
-    // Inversa da matriz de colunas a, b e c como vieram, linha por linha.
+    // Inverse of the matrix whose columns are a, b and c as given, row by row.
     readonly double i00, i01, i02, i10, i11, i12, i20, i21, i22;
 
     LatticeFrame(CrystalCell cell, bool reversed, double[] inverse)
@@ -76,7 +76,7 @@ internal readonly struct LatticeFrame
         Valid = true;
     }
 
-    // Vetores sem volume: a cela, que nao e valida, e nada mais.
+    // Vectors without volume: the cell, which is not valid, and nothing else.
     LatticeFrame(CrystalCell cell) => Cell = cell;
 
     /// <summary>False for vectors that are coplanar, too short or not finite.</summary>
@@ -95,7 +95,7 @@ internal readonly struct LatticeFrame
         double la = Math.Sqrt(ax * ax + ay * ay + az * az);
         double lb = Math.Sqrt(bx * bx + by * by + bz * bz);
         double lc = Math.Sqrt(cx * cx + cy * cy + cz * cz);
-        // Determinante = a . (b x c), o volume com sinal.
+        // Determinant = a . (b x c), the signed volume.
         double det = ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
         bool reversed = det < 0;
         double sign = reversed ? -1 : 1;
@@ -105,7 +105,7 @@ internal readonly struct LatticeFrame
             Angle(ax, ay, az, bx, by, bz, la, lb));
         if (!double.IsFinite(det) || !cell.IsValid)
             return new LatticeFrame(cell);
-        // Inversa pela adjunta: as linhas sao b x c, c x a e a x b sobre o determinante.
+        // Inverse by the adjugate: the rows are b x c, c x a and a x b over the determinant.
         double[] inverse =
         [
             (by * cz - bz * cy) / det, (bz * cx - bx * cz) / det, (bx * cy - by * cx) / det,

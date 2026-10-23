@@ -4,7 +4,7 @@ namespace Viewer3D.Crystal.Tests;
 
 public class XyzTrajectoryReaderTests
 {
-    // Agua: O-H 0,9572 A, H-O-H 104,52 graus; o segundo quadro desloca a molecula 0,5 A em x.
+    // Water: O-H 0.9572 A, H-O-H 104.52 degrees; the second frame moves the molecule 0.5 A along x.
     const string Water = """
         3
         water, frame 1
@@ -18,9 +18,9 @@ public class XyzTrajectoryReaderTests
         H   -0.256950    0.585882    0.000000
         """;
 
-    // NaCl, a = 5,64 A, celula convencional. Escrito a mao no leiaute do ase.io.write(format="extxyz") (sem o ASE nesta
-    // maquina): Lattice e pbc entre aspas, Properties com as forcas, uma energia do calculo. Um arquivo de corrida real
-    // fica para a validacao manual.
+    // NaCl, a = 5.64 A, conventional cell. Written by hand in the layout of ase.io.write(format="extxyz") (ASE is not on
+    // this machine): Lattice and pbc in quotes, Properties with the forces, an energy of the run. A file from a real run
+    // is left to the manual check.
     const string SaltExtended = """
         8
         Lattice="5.64 0.0 0.0 0.0 5.64 0.0 0.0 0.0 5.64" Properties=species:S:1:pos:R:3:forces:R:3 energy=-27.41 pbc="T T T"
@@ -182,7 +182,7 @@ public class XyzTrajectoryReaderTests
     [Fact]
     public void ReadThenBuilt_EveryAtomOfTheFileIsDrawn_AndEveryBondOfTheGeometry()
     {
-        // Interacao: o texto lido pelo leitor e montado pelo builder de verdade, quadro a quadro.
+        // Interaction: the text read by the reader is built by the real builder, frame by frame.
         var builder = new CrystalSceneBuilder();
         var options = new CrystalSceneOptions { IncludeLabels = false, ShowBoundaryAtoms = false, CompleteCoordination = false };
         CrystalTrajectory water = Read(Water);
@@ -193,7 +193,7 @@ public class XyzTrajectoryReaderTests
 
         Assert.All(waterFrames.Frames, f => Assert.Equal(3, f.Items.OfType<SphereItem>().Count()));
         Assert.Equal(8, saltFrames.Frames[0].Items.OfType<SphereItem>().Count());
-        // Com a coordenacao completa, cada uma das 24 ligacoes do NaCl aparece em ao menos um bastao.
+        // With the whole coordination, each of the 24 bonds of NaCl shows in at least one rod.
         CrystalScene built = builder.Build(salt.Frames[0].Structure, options with { CompleteCoordination = true });
         Assert.Equal(24, built.Scene.Items.Select(i => built.Lookup(i.Id)).Where(i => i?.Kind == CrystalItemKind.Bond)
             .Select(i => i!.BondIndex).Distinct().Count());

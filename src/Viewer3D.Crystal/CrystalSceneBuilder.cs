@@ -1227,7 +1227,7 @@ public sealed class CrystalSceneBuilder
             };
         }
 
-        // O deslocamento entra so aqui, no ponto desenhado: imagens, recorte e limites seguem a posicao de repouso.
+        // The offset enters only here, at the drawn point: images, clip and limits keep the position at rest.
         Vector3 Position(int atom, LatticeShift t)
         {
             Reduced r = reduced[atom];

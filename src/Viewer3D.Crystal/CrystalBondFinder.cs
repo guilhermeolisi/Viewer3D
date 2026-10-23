@@ -46,7 +46,7 @@ public static class CrystalBondFinder
                 anyNonMetal |= !info.IsMetal;
                 largest = Math.Max(largest, info.Radius);
             }
-            // Com cela, a busca corre sobre as posicoes reduzidas a [0, 1), e as imagens -1..1 cobrem os vizinhos.
+            // With a cell the search runs over the positions reduced to [0, 1), and the images -1..1 cover the neighbors.
             CrystalSceneBuilder.Reduced r = periodic
                 ? CrystalSceneBuilder.Reduce(atom.X, atom.Y, atom.Z)
                 : new CrystalSceneBuilder.Reduced(atom.X, atom.Y, atom.Z, LatticeShift.Zero);
@@ -81,7 +81,7 @@ public static class CrystalBondFinder
                     {
                         if (double.IsNaN(radius[i]))
                             continue;
-                        // Atomo j transladado por shift perto de i: |p_j + T - p_i| = |p_j - (p_i - T)|.
+                        // Atom j translated by the shift near i: |p_j + T - p_i| = |p_j - (p_i - T)|.
                         (double qx, double qy, double qz) = (position[i].X - tx, position[i].Y - ty, position[i].Z - tz);
                         (int bx, int by, int bz) = Bin((qx, qy, qz), reach);
                         for (int gx = bx - 1; gx <= bx + 1; gx++)
@@ -92,7 +92,7 @@ public static class CrystalBondFinder
                                         continue;
                                     foreach (int j in bin)
                                     {
-                                        // Cada ligacao uma vez: (i, j, s) e (j, i, -s) sao a mesma.
+                                        // Each bond once: (i, j, s) and (j, i, -s) are the same.
                                         if (j < i || (j == i && !Positive(shift)))
                                             continue;
                                         if (metal[i] && metal[j] && anyNonMetal)
@@ -101,7 +101,7 @@ public static class CrystalBondFinder
                                         double d = Math.Sqrt(dx * dx + dy * dy + dz * dz);
                                         if (d < MinDistance || d > radius[i] + radius[j] + Tolerance)
                                             continue;
-                                        // Das posicoes reduzidas para as coordenadas como vieram: S = s - F_j + F_i.
+                                        // From the reduced positions back to the coordinates as given: S = s - F_j + F_i.
                                         bonds.Add(new CrystalBond(i, j, shift - floor[j] + floor[i]));
                                     }
                                 }

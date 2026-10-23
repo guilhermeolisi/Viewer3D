@@ -75,7 +75,7 @@ public sealed class CrystalTrajectory
         CrystalSceneOptions molecule = options with { RepeatA = 1, RepeatB = 1, RepeatC = 1, Clip = CrystalClip.Cell };
         bool light = lowDetail && options.Style is CrystalStyle.ThermalEllipsoids or CrystalStyle.Polyhedra or CrystalStyle.PolyhedraWithEllipsoids;
 
-        // Antes de montar: os atomos que cada quadro tera pelo menos, uma ou duas vezes (com a versao leve).
+        // Before building: the atoms each frame will have at least, once or twice (with the low detail version).
         long least = 0;
         foreach (CrystalTrajectoryFrame frame in Frames)
         {

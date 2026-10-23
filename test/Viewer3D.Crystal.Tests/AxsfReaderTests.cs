@@ -4,8 +4,8 @@ namespace Viewer3D.Crystal.Tests;
 
 public class AxsfReaderTests
 {
-    // NaCl, a = 5,64 A, celula convencional fixa, dois passos; o segundo desloca o primeiro Na 0,1 A em x. Atomos por
-    // numero atomico, com as tres colunas de forca do leiaute do XCrySDen (lidas e ignoradas).
+    // NaCl, a = 5.64 A, fixed conventional cell, two steps; the second moves the first Na 0.1 A along x. Atoms by
+    // atomic number, with the three force columns of the XCrySDen layout (read and ignored).
     const string SaltFixedCell = """
         # NaCl, two steps
         ANIMSTEPS 2
@@ -40,7 +40,7 @@ public class AxsfReaderTests
         17 0.00 2.82 0.00   0.00 0.00 0.00
         """;
 
-    // Cela variavel: PRIMVEC i antes de cada PRIMCOORD i, a de 4 A e depois 4,4 A; simbolos no lugar dos numeros.
+    // Variable cell: PRIMVEC i before each PRIMCOORD i, a of 4 A and then 4.4 A; symbols instead of numbers.
     const string VariableCell = """
         ANIMSTEPS 2
         CRYSTAL
@@ -62,7 +62,7 @@ public class AxsfReaderTests
         Cl 2.2 2.2 2.2
         """;
 
-    // Agua em ATOMS i, sem contagem: os atomos de um passo vao ate a proxima palavra-chave.
+    // Water in ATOMS i, without a count: the atoms of a step run to the next keyword.
     const string WaterMolecule = """
         ANIMSTEPS 2
         ATOMS 1
@@ -231,7 +231,7 @@ public class AxsfReaderTests
     [Fact]
     public void ReadThenBuilt_EveryAtomOfEveryStepIsDrawn_AndEveryBondOfTheGeometry()
     {
-        // Interacao: o texto lido pelo leitor e montado pelo builder de verdade, passo a passo.
+        // Interaction: the text read by the reader is built by the real builder, step by step.
         var builder = new CrystalSceneBuilder();
         var options = new CrystalSceneOptions { IncludeLabels = false, ShowBoundaryAtoms = false, CompleteCoordination = false };
         CrystalTrajectory salt = Read(SaltFixedCell);
@@ -243,7 +243,7 @@ public class AxsfReaderTests
         Assert.Equal(2, saltFrames.Frames.Count);
         Assert.All(saltFrames.Frames, f => Assert.Equal(8, f.Items.OfType<SphereItem>().Count()));
         Assert.All(waterFrames.Frames, f => Assert.Equal(3, f.Items.OfType<SphereItem>().Count()));
-        // Com a coordenacao completa, cada uma das 24 ligacoes do NaCl aparece em ao menos um bastao, nos dois passos.
+        // With the whole coordination, each of the 24 bonds of NaCl shows in at least one rod, in both steps.
         foreach (CrystalTrajectoryFrame frame in salt.Frames)
         {
             CrystalScene built = builder.Build(frame.Structure, options with { CompleteCoordination = true });

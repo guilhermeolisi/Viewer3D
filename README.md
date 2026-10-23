@@ -270,6 +270,56 @@ frame, and above `maxWeight` (default `DefaultMaxWeight`, 4,000,000) the constru
 (an OBJ mesh) to 128 (ellipsoids), so the default keeps the frames under about 490 MiB. A reader that builds frames
 one by one sums `WeightOf` as it goes and calls `CheckWeight`, so it refuses early.
 
+### Frames from files
+
+`ObjSequenceReader.Read(paths, frameDuration)` and `ReadFolder(folder, frameDuration)` read a series of OBJ files, one
+per frame, sorted by `NaturalOrder` (`step_2.obj` before `step_10.obj`). Each file keeps the limits of `ObjReader`, a
+file that is refused names itself at the start of the message, and fewer than two files is
+`ObjReadError.TooFewFrames`. Give the meshes the same names and order in every file, so their ids stay the same.
+
+`Viewer3D.Crystal` reads two trajectory formats into a `CrystalTrajectory`, one `CrystalStructure` per frame:
+
+- `XyzTrajectoryReader`: XYZ with any number of frames, the atom count free to change from one to the next, and
+  Extended XYZ (`Lattice="..."` for the cell as given, `pbc="F F F"` for a molecule, `Properties=` to find the
+  `species` or `Z` and `pos` columns).
+- `AxsfReader`: XCrySDen AXSF animations and still XSF files, with `PRIMVEC` once or per step (`PRIMVEC i`), atoms in
+  `PRIMCOORD i` (forces ignored) or, for a molecule, `ATOMS i`.
+
+Elements are symbols in any case or atomic numbers; an element the table does not know is drawn gray, with a warning
+in `Warnings`. The bonds come from the geometry (`CrystalBondFinder`: d up to r1 + r2 + 0.45 angstrom, as Jmol does,
+and no metal-metal bond when the structure has another element). A molecule without a cell moves inside one box around
+the whole trajectory, drawn without edges. Files are untrusted: `TrajectoryReadOptions` caps a file at 64 MiB and a
+frame at 100,000 atoms before its positions are kept, and a bad line is refused with its number
+(`TrajectoryReadException`). `ToSequence(builder, options)` builds the frames, checking the weight from the atom counts
+before building and again frame by frame; raise `CrystalSceneOptions.MaxCost` for frames past 3000 atoms.
+
+```csharp
+CrystalTrajectory trajectory = XyzTrajectoryReader.Read("run.xyz");
+viewer.Sequence = trajectory.ToSequence(new CrystalSceneBuilder(), new CrystalSceneOptions());
+viewer.IsPlaying = true;
+```
+
+### Thermal motion
+
+`ThermalMotion.BuildSequence(builder, structure, options)` animates the displacement tensors of a structure: each atom
+runs a closed loop whose positions, taken over the loop, have the covariance k² U of its tensor, the Gaussian
+displacement the ellipsoids draw (Johnson 1976, ORTEP-II, ORNL-5138; Trueblood et al. 1996, Acta Cryst. A52, 770).
+With λᵢ and eᵢ the eigenvalues and eigenvectors of U, the offset is d(θ) = k Σᵢ √(2λᵢ) eᵢ fᵢ(θ), with three
+functions {cos(θ + ψ), sin(θ + ψ), cos(2θ + ψ')} in an order and with phases drawn per atom from a seed. **The loop
+illustrates the size and shape of the distribution; it is not a real motion**: the atoms move independently, and the
+correlations between them (the phonons) are not in a tensor. `ThermalMotionOptions` sets k (`Amplitude`, up to 3), the
+frames in a loop (8 to 120), the period and the seed. An atom without a tensor, with one that is not positive definite,
+or a void site stays at rest; `HasMotion` tells whether anything moves.
+
+The offsets go through `CrystalSceneOptions.AtomOffsets`, added only where an atom is drawn: which images are drawn,
+the clip and the bond limits keep the position at rest, so every frame has the items and ids of the scene at rest
+(an atom on a cell corner keeps its boundary images), and the selection survives the playback.
+
+| ![Thermal motion, start](docs/images/thermal-motion_0001.png) | ![Thermal motion, a quarter](docs/images/thermal-motion_0002.png) | ![Thermal motion, half](docs/images/thermal-motion_0003.png) | ![Thermal motion, three quarters](docs/images/thermal-motion_0004.png) |
+|---|---|---|---|
+
+Fluorite with made-up tensors at k = 3, four frames a quarter of the loop apart.
+
 ## Theme colors
 
 The control reads these resources (a `Color` or a solid brush), with built-in light and dark defaults:
