@@ -29,7 +29,7 @@ public class ThermalEllipsoidsTests
         return s with { Atoms = [.. s.Atoms.Select(a => a with { Displacements = [a.Element == "Ca" ? ca : f] })] };
     }
 
-    /// <summary>erf pela serie de Taylor: 60 termos bastam ate z = 2 em double.</summary>
+    /// <summary>erf pela serie de Taylor: 60 termos bastam ate z = 2,4 (o nivel de 99%) em double.</summary>
     static double Erf(double z)
     {
         double sum = 0, term = z;
@@ -46,6 +46,7 @@ public class ThermalEllipsoidsTests
     [InlineData(50)]
     [InlineData(70)]
     [InlineData(90)]
+    [InlineData(99)]
     public void ProbabilityScale_SquaredIsTheChiSquareQuantileWithThreeDegrees(int level)
     {
         // Pega fator trocado: P(chi2_3 <= f^2) = erf(sqrt(x/2)) - sqrt(2x/pi) e^(-x/2), com x = f^2.

@@ -13,8 +13,9 @@
   out of the lines that cross it and picked inside its outline. `EllipseProjection` holds the geometry.
   `SphereItem.Dashed` draws only a dashed outline. `MeshShapes.Cube` builds a small cube.
 - `Viewer3D.Crystal`: the `ThermalEllipsoids` style draws each atom from its displacement tensors
-  (`CrystalAtom.Displacements`) at a probability level of 30, 50, 70 or 90% (`ProbabilityScale`), with thin rods cut
-  at the surfaces; a tensor that is not positive definite is a small cube and an atom without data a dashed sphere.
+  (`CrystalAtom.Displacements`) at a probability level of 30, 50, 70, 90 or 99% (`ProbabilityScale`), with thin rods
+  cut at the surfaces; a tensor that is not positive definite is a small cube and an atom without data a dashed sphere.
+  `CrystalSceneOptions.DisplacementMagnification` draws the shapes larger or smaller than their probability (default 1).
 - `Viewer3D.Sample`: `--bench-ellipsoids N` times a frame of N ellipsoids.
 - `Viewer3D`: `MeshItem.Edges` draws only the given edges of a mesh (the edges of a polyhedron, not the diagonals of
   its faces), cut out where they enter a sphere and painted after the faces they border; picking one reports the mesh.

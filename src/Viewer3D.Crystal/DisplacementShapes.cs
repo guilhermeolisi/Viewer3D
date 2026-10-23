@@ -11,16 +11,17 @@ namespace Viewer3D.Crystal;
 public static class ProbabilityScale
 {
     /// <summary>The probability levels offered, in percent.</summary>
-    public static IReadOnlyList<int> Levels { get; } = [30, 50, 70, 90];
+    public static IReadOnlyList<int> Levels { get; } = [30, 50, 70, 90, 99];
 
-    /// <summary>The factor f for a level in percent: 30, 50, 70 or 90.</summary>
+    /// <summary>The factor f for a level in percent: 30, 50, 70, 90 or 99.</summary>
     public static double For(int level) => level switch
     {
         30 => 1.1932,
         50 => 1.5382,
         70 => 1.9144,
         90 => 2.5003,
-        _ => throw new ArgumentOutOfRangeException(nameof(level), level, "The level must be 30, 50, 70 or 90."),
+        99 => 3.3682,
+        _ => throw new ArgumentOutOfRangeException(nameof(level), level, "The level must be 30, 50, 70, 90 or 99."),
     };
 }
 

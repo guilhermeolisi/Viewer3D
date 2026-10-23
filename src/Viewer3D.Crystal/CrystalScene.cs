@@ -147,8 +147,8 @@ public sealed record CrystalSceneOptions
     public double BondRadius { get; init; } = 0.12;
 
     /// <summary>
-    /// Probability of the ellipsoids, in percent, in <see cref="CrystalStyle.ThermalEllipsoids"/>: 30, 50, 70 or 90
-    /// (<see cref="ProbabilityScale"/>). Any other value takes 50.
+    /// Probability of the ellipsoids, in percent, in <see cref="CrystalStyle.ThermalEllipsoids"/>: 30, 50, 70, 90
+    /// or 99 (<see cref="ProbabilityScale"/>). Any other value takes 50.
     /// </summary>
     public int ProbabilityLevel { get; init; } = 50;
 
