@@ -355,6 +355,11 @@ public sealed class CrystalSceneBuilder
             this.basis = basis;
             this.app = app;
             IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
+            if (options.AtomOffsets is { } offsets && offsets.Count != atoms.Count)
+            {
+                throw new ArgumentException(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "AtomOffsets has {0} entries; the structure has {1} atoms.", offsets.Count, atoms.Count), nameof(options));
+            }
             reduced = new Reduced[atoms.Count];
             radius = new double[atoms.Count];
             color = new Rgba[atoms.Count];
@@ -1222,10 +1227,12 @@ public sealed class CrystalSceneBuilder
             };
         }
 
+        // O deslocamento entra so aqui, no ponto desenhado: imagens, recorte e limites seguem a posicao de repouso.
         Vector3 Position(int atom, LatticeShift t)
         {
             Reduced r = reduced[atom];
-            return basis.ToCartesian(r.X + t.A, r.Y + t.B, r.Z + t.C);
+            Vector3 p = basis.ToCartesian(r.X + t.A, r.Y + t.B, r.Z + t.C);
+            return options.AtomOffsets is { } offsets ? p + offsets[atom] : p;
         }
 
         static bool OnBlock(double coordinate, int image, int size)

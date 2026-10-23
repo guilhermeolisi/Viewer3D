@@ -105,6 +105,11 @@
 - `Viewer3D.Crystal`: `AxsfReader` reads XCrySDen animations (AXSF) and still XSF files: `PRIMVEC` fixed or per step,
   `PRIMCOORD` with atomic numbers or symbols (force columns read past), `ATOMS` for a molecule; `CONVVEC`, `CONVCOORD`,
   data grids and comments are skipped, and an `ANIMSTEPS` that disagrees with the file warns.
+- `Viewer3D.Crystal`: `CrystalSceneOptions.AtomOffsets` moves where each atom is drawn (its rods, polyhedra and labels
+  follow) while the images, the clip and the bond limits keep the position at rest, so the items and their ids stay the
+  same. `ThermalMotion` animates the displacement tensors: each atom runs a closed loop whose positions have the
+  covariance k² U of its tensor (`ThermalMotionOptions`: amplitude up to 3, 8 to 120 frames, period, seed), built into a
+  looping `SceneSequence` by `BuildSequence`. It illustrates the distribution; it is not a real motion.
 - `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
   `--bench-sequence N` times a frame of a sequence of fluorite blocks.
 

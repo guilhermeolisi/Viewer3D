@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace Viewer3D.Crystal;
 
 /// <summary>How the atoms of a crystal structure are drawn. New styles add values at the end.</summary>
@@ -214,6 +216,14 @@ public sealed record CrystalSceneOptions
 
     /// <summary>Opacity of the void markers and spheres, from 0 (invisible) to 1 (opaque).</summary>
     public double VoidOpacity { get; init; } = 0.5;
+
+    /// <summary>
+    /// A Cartesian offset per atom, in angstrom, indexed as <see cref="CrystalStructure.Atoms"/>, added where each image
+    /// of the atom is drawn; the rods, polyhedra and labels follow it. Which images are drawn, the clip and the bond
+    /// limits still go by the position at rest, so a frame of an animation has the same items with the same ids as the
+    /// scene at rest (<see cref="ThermalMotion"/>). Null draws every atom at rest; a list of another length is refused.
+    /// </summary>
+    public IReadOnlyList<Vector3>? AtomOffsets { get; init; }
 }
 
 /// <summary>One element of the legend.</summary>

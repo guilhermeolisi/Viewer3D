@@ -303,5 +303,15 @@ public class CrystalSceneBuilderTests
         Assert.NotNull(scene.Warning);
     }
 
+    [Fact]
+    public void AtomOffsets_OfAnotherLength_AreRefused()
+    {
+        CrystalStructure fluorite = Fixtures.Fluorite();
+
+        var refused = Assert.Throws<ArgumentException>(() => Builder.Build(fluorite, Options() with { AtomOffsets = [Vector3.Zero] }));
+
+        Assert.Contains("12 atoms", refused.Message);
+    }
+
     static bool Near(Vector3 p, Vector3 q) => (p - q).Length() < 1e-3f;
 }
