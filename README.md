@@ -92,7 +92,7 @@ structure = structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtom
 CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions
 {
     Style = CrystalStyle.BallAndStick,          // or CrystalStyle.SpaceFilling
-    RepeatA = 2, RepeatB = 2, RepeatC = 1,      // 1 to 3 cells along each axis
+    RepeatA = 2, RepeatB = 2, RepeatC = 1,      // cells along each axis, up to the cost ceiling
 });
 viewer.Scene = scene.Scene;
 viewer.AxisDirections = scene.Axes;              // a, b and c, in the viewer's axis colors
@@ -106,7 +106,7 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
 - **Frame.** a along x, b in the xy plane, c on the side of +z, in angstrom.
 - **Block.** Positions are reduced to the cell; `ShowBoundaryAtoms` adds the atoms on the far faces of the block,
   and `CompleteCoordination` draws the bonded neighbors outside it as faded spheres. The cell edges are drawn once
-  each; the axes go to the axis indicator only. A block past 3000 spheres falls back to one cell, with a `Warning`.
+  each; the axes go to the axis indicator only. A block past the cost ceiling falls back to one cell, with a `Warning`.
 - **Styles.** Ball and stick draws each sphere at `BallScale` times the atom radius, with rods. Space filling has no
   rods and multiplies every radius by s = min over the bonds of d / (r1 + r2), so the closest bonded pair touches
   and no bonded pair overlaps; without bonds, s comes from the shortest distance in one cell.
@@ -116,7 +116,7 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
   one around every drawn image of its center as a translucent mesh (`PolyhedronOpacity`) with its edges; a vertex
   outside the block is a faded sphere. `ShowPolyhedronVertices`, `ShowBondsInsidePolyhedra`, `PolyhedronBackFaces`
   and `EnabledPolyhedra` choose what is drawn. Faces are ordered back to front per triangle, which is right for convex
-  polyhedra that only share vertices, edges or faces. Against the 3000 ceiling a polyhedron counts as 8 spheres.
+  polyhedra that only share vertices, edges or faces. Against the cost ceiling a polyhedron counts as 8 spheres.
   Run `Viewer3D.Sample --bench-polyhedra N` in Release to time N octahedra.
 - **Bond length.** A bond is automatic (`IsAutomatic`, the owner's own criterion) or a candidate that only a length
   limit draws. `CrystalSceneOptions.MaxBondLength`, and `AtomStyle.MaxBondLength` per element, site or atom over it,
@@ -134,7 +134,7 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
 `Clip = CrystalClip.Sphere` shows every atom image within `SphereRadius` angstrom of `SphereCenter` (fractional
 coordinates), whatever cell it falls in, instead of a block of cells. A bond is drawn only when both of its atoms are
 inside, and there are no cell edges; a polyhedron around a center inside is drawn whole, with its outside vertices
-faded. A sphere past 3000 spheres falls back to one cell, with a `Warning`.
+faded. A sphere past the cost ceiling falls back to one cell, with a `Warning`.
 
 ```csharp
 CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions
@@ -146,6 +146,14 @@ CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalScene
 ```
 
 ![Rock salt, sphere of 6 angstrom around a Cl](docs/images/crystal-sphere.png)
+
+### Scene cost ceiling
+
+The cost of a scene is its spheres plus 8 per polyhedron, held against `CrystalSceneOptions.MaxCost` (3000 by
+default); the repetition has no other bound. `CrystalSceneBuilder.Estimate` counts the cost without building the scene
+and gives the block (`Fits`) or the radius (`FitsRadius`) that fits, so a host can refuse a change and say what would
+fit. `TryBuild` builds only within the ceiling, with no fallback. Run `Viewer3D.Sample --bench-cost 3000,6000,12000` in
+Release to time the build and the frame at each cost and choose a ceiling.
 
 ### Appearance
 

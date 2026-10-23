@@ -80,58 +80,190 @@ public sealed class CrystalSceneBuilder
         ArgumentNullException.ThrowIfNull(options);
         CellBasis basis = structure.Cell.Basis();
         if (!basis.Valid)
-            return new CrystalScene(Scene.Empty, structure.Cell, [], 0, [], 0, "The cell is not valid.",
-                new Dictionary<int, CrystalItemInfo>());
+            return InvalidCell(structure);
 
         var context = new Context(structure, options, basis, appearance ?? CrystalAppearance.Default);
+        int ceiling = CeilingOf(options);
         if (options.Clip == CrystalClip.Sphere)
-            return BuildSphere(structure, options, basis, context);
-        var n = new LatticeShift(Math.Clamp(options.RepeatA, 1, 3), Math.Clamp(options.RepeatB, 1, 3),
-            Math.Clamp(options.RepeatC, 1, 3));
+            return BuildSphere(options, context, ceiling);
+        LatticeShift n = RepeatOf(options);
+        if (n == One)
+            return context.Build(n, null);
+        // A contagem antes da montagem: um bloco muito acima do teto nao chega a ser montado.
+        (long atoms, long polyhedra) = context.CountBlock(n);
+        if (CostOf(atoms, polyhedra) > ceiling)
+            return context.Build(One, BlockWarning(n, atoms, polyhedra, ceiling));
         CrystalScene scene = context.Build(n, null);
-        int cost = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
-        if (cost > CrystalSceneOptions.MaxAtoms && n != new LatticeShift(1, 1, 1))
-        {
-            string warning = scene.PolyhedronCount == 0
-                ? $"{n.A} x {n.B} x {n.C} cells would draw {scene.AtomCount} atoms, more than "
-                    + $"{CrystalSceneOptions.MaxAtoms}; showing one cell."
-                : $"{n.A} x {n.B} x {n.C} cells would draw {scene.AtomCount} atoms and {scene.PolyhedronCount} polyhedra, "
-                    + $"more than the {CrystalSceneOptions.MaxAtoms} atoms allowed (a polyhedron counts as "
-                    + $"{CrystalSceneOptions.PolyhedronCost}); showing one cell.";
-            scene = context.Build(new LatticeShift(1, 1, 1), warning);
-        }
+        if (CostOf(scene) > ceiling)
+            scene = context.Build(One, BlockWarning(n, scene.AtomCount, scene.PolyhedronCount, ceiling));
         return scene;
     }
 
     /// <summary>
-    /// The scene of <see cref="CrystalClip.Sphere"/>; past the ceiling, one cell with a warning. A sphere whose expected
-    /// count (atoms per cell times the sphere volume over the cell volume) is far past the ceiling is not built at all.
+    /// The cost of the scene of <paramref name="structure"/>, counted without building it, against
+    /// <see cref="CrystalSceneOptions.MaxCost"/>, and the repetition or radius that fits (<see cref="CrystalSceneEstimate"/>).
+    /// A sphere whose expected count (atoms per cell times the sphere volume over the cell volume) is far past the ceiling
+    /// is counted by that expectation alone, with no polyhedra.
     /// </summary>
-    static CrystalScene BuildSphere(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis, Context context)
+    public CrystalSceneEstimate Estimate(CrystalStructure structure, CrystalSceneOptions options, CrystalAppearance? appearance = null)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(options);
+        CellBasis basis = structure.Cell.Basis();
+        int ceiling = CeilingOf(options);
+        bool sphere = options.Clip == CrystalClip.Sphere;
+        if (!basis.Valid)
+            return new CrystalSceneEstimate(0, 0, 0, ceiling, sphere ? One : RepeatOf(options), sphere ? SphereOf(options).Radius : double.NaN);
+        return EstimateWith(new Context(structure, options, basis, appearance ?? CrystalAppearance.Default), options, ceiling);
+    }
+
+    /// <summary>
+    /// Builds the scene of <paramref name="structure"/> only when it fits <see cref="CrystalSceneOptions.MaxCost"/>, with
+    /// no fallback to one cell: false, with <paramref name="scene"/> null, when the <paramref name="estimate"/> is past the
+    /// ceiling, or when the scene built is (its faded neighbors count), and then the estimate carries the cost of the
+    /// scene built and a repetition or radius one step below the one asked.
+    /// </summary>
+    public bool TryBuild(CrystalStructure structure, CrystalSceneOptions options, CrystalAppearance? appearance,
+        out CrystalScene? scene, out CrystalSceneEstimate estimate)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        ArgumentNullException.ThrowIfNull(options);
+        scene = null;
+        CellBasis basis = structure.Cell.Basis();
+        int ceiling = CeilingOf(options);
+        bool sphere = options.Clip == CrystalClip.Sphere;
+        if (!basis.Valid)
+        {
+            estimate = new CrystalSceneEstimate(0, 0, 0, ceiling, sphere ? One : RepeatOf(options), sphere ? SphereOf(options).Radius : double.NaN);
+            scene = InvalidCell(structure);
+            return true;
+        }
+        var context = new Context(structure, options, basis, appearance ?? CrystalAppearance.Default);
+        estimate = EstimateWith(context, options, ceiling);
+        if (!estimate.Fit)
+            return false;
+        CrystalScene built = sphere ? context.Build(One, null, SphereOf(options)) : context.Build(RepeatOf(options), null);
+        int cost = CostOf(built);
+        if (cost > ceiling)
+        {
+            double radius = SphereOf(options).Radius;
+            estimate = estimate with
+            {
+                Atoms = built.AtomCount,
+                Polyhedra = built.PolyhedronCount,
+                Cost = cost,
+                Fits = sphere ? One : Shrink(RepeatOf(options)),
+                FitsRadius = sphere ? Math.Max(0, Math.Ceiling(2 * radius) / 2 - 0.5) : double.NaN,
+            };
+            return false;
+        }
+        scene = built;
+        return true;
+    }
+
+    static readonly LatticeShift One = new(1, 1, 1);
+
+    static CrystalScene InvalidCell(CrystalStructure structure)
+        => new(Scene.Empty, structure.Cell, [], 0, [], 0, "The cell is not valid.", new Dictionary<int, CrystalItemInfo>());
+
+    static int CeilingOf(CrystalSceneOptions options) => options.MaxCost >= 1 ? options.MaxCost : CrystalSceneOptions.MaxAtoms;
+
+    static LatticeShift RepeatOf(CrystalSceneOptions options)
+        => new(Math.Max(1, options.RepeatA), Math.Max(1, options.RepeatB), Math.Max(1, options.RepeatC));
+
+    /// <summary>The sphere of the options, with a center that is not finite at 0.5 and a radius that is not positive at 6.</summary>
+    static SphereClip SphereOf(CrystalSceneOptions options)
     {
         FractionalPoint c = options.SphereCenter;
-        var center = new FractionalPoint(Finite(c.X), Finite(c.Y), Finite(c.Z));
         double radius = double.IsFinite(options.SphereRadius) && options.SphereRadius > 0 ? options.SphereRadius : 6;
-        var one = new LatticeShift(1, 1, 1);
-        double expected = structure.Atoms.Count * 4 * Math.PI * radius * radius * radius / (3 * basis.Volume);
-        if (expected > 4 * CrystalSceneOptions.MaxAtoms)
-        {
-            return context.Build(one, $"A sphere of radius {radius:0.##} Å would draw about {expected:0} atoms, more than "
-                + $"{CrystalSceneOptions.MaxAtoms}; showing one cell.");
-        }
-        CrystalScene scene = context.Build(one, null, new SphereClip(center, radius));
-        int cost = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
-        if (cost <= CrystalSceneOptions.MaxAtoms)
-            return scene;
-        string warning = scene.PolyhedronCount == 0
-            ? $"A sphere of radius {radius:0.##} Å would draw {scene.AtomCount} atoms, more than "
-                + $"{CrystalSceneOptions.MaxAtoms}; showing one cell."
-            : $"A sphere of radius {radius:0.##} Å would draw {scene.AtomCount} atoms and {scene.PolyhedronCount} polyhedra, "
-                + $"more than the {CrystalSceneOptions.MaxAtoms} atoms allowed (a polyhedron counts as "
-                + $"{CrystalSceneOptions.PolyhedronCost}); showing one cell.";
-        return context.Build(one, warning);
+        return new SphereClip(new FractionalPoint(Finite(c.X), Finite(c.Y), Finite(c.Z)), radius);
 
         static double Finite(double v) => double.IsFinite(v) ? v : 0.5;
+    }
+
+    static int CostOf(long atoms, long polyhedra)
+        => (int)Math.Min(int.MaxValue, atoms + (long)CrystalSceneOptions.PolyhedronCost * polyhedra);
+
+    static int CostOf(CrystalScene scene) => CostOf(scene.AtomCount, scene.PolyhedronCount);
+
+    /// <summary>The repetition with its largest axis one cell shorter (a before b before c on a tie); 1 x 1 x 1 stays.</summary>
+    static LatticeShift Shrink(LatticeShift n)
+    {
+        int max = Math.Max(n.A, Math.Max(n.B, n.C));
+        if (max <= 1)
+            return n;
+        return n.A == max ? n with { A = n.A - 1 } : n.B == max ? n with { B = n.B - 1 } : n with { C = n.C - 1 };
+    }
+
+    static CrystalSceneEstimate EstimateWith(Context context, CrystalSceneOptions options, int ceiling)
+    {
+        if (options.Clip == CrystalClip.Sphere)
+        {
+            SphereClip clip = SphereOf(options);
+            (long atoms, long polyhedra) = context.CountSphere(clip.Center, clip.Radius, ceiling);
+            int cost = CostOf(atoms, polyhedra);
+            double fits = clip.Radius;
+            if (cost > ceiling)
+            {
+                fits = 0;
+                for (double r = Math.Ceiling(2 * clip.Radius) / 2 - 0.5; r >= 0.5; r -= 0.5)
+                {
+                    (long a, long p) = context.CountSphere(clip.Center, r, ceiling);
+                    if (CostOf(a, p) <= ceiling)
+                    {
+                        fits = r;
+                        break;
+                    }
+                }
+            }
+            return new CrystalSceneEstimate((int)Math.Min(int.MaxValue, atoms), (int)Math.Min(int.MaxValue, polyhedra), cost,
+                ceiling, One, fits);
+        }
+        LatticeShift n = RepeatOf(options);
+        (long blockAtoms, long blockPolyhedra) = context.CountBlock(n);
+        LatticeShift fit = n;
+        (long fa, long fp) = (blockAtoms, blockPolyhedra);
+        while (CostOf(fa, fp) > ceiling && fit != One)
+        {
+            fit = Shrink(fit);
+            (fa, fp) = context.CountBlock(fit);
+        }
+        return new CrystalSceneEstimate((int)Math.Min(int.MaxValue, blockAtoms), (int)Math.Min(int.MaxValue, blockPolyhedra),
+            CostOf(blockAtoms, blockPolyhedra), ceiling, fit, double.NaN);
+    }
+
+    static string BlockWarning(LatticeShift n, long atoms, long polyhedra, int ceiling)
+        => polyhedra == 0
+            ? $"{n.A} x {n.B} x {n.C} cells would draw {atoms} atoms, more than {ceiling}; showing one cell."
+            : $"{n.A} x {n.B} x {n.C} cells would draw {atoms} atoms and {polyhedra} polyhedra, more than the {ceiling} "
+                + $"atoms allowed (a polyhedron counts as {CrystalSceneOptions.PolyhedronCost}); showing one cell.";
+
+    static string SphereWarning(double radius, long atoms, long polyhedra, int ceiling)
+        => polyhedra == 0
+            ? $"A sphere of radius {radius:0.##} Å would draw {atoms} atoms, more than {ceiling}; showing one cell."
+            : $"A sphere of radius {radius:0.##} Å would draw {atoms} atoms and {polyhedra} polyhedra, more than the {ceiling} "
+                + $"atoms allowed (a polyhedron counts as {CrystalSceneOptions.PolyhedronCost}); showing one cell.";
+
+    /// <summary>
+    /// The scene of <see cref="CrystalClip.Sphere"/>; past the ceiling, one cell with a warning. A sphere whose expected
+    /// count (atoms per cell times the sphere volume over the cell volume) is far past the ceiling is not counted nor built.
+    /// </summary>
+    static CrystalScene BuildSphere(CrystalSceneOptions options, Context context, int ceiling)
+    {
+        SphereClip clip = SphereOf(options);
+        double expected = context.ExpectedInSphere(clip.Radius);
+        if (expected > 4.0 * ceiling)
+        {
+            return context.Build(One, $"A sphere of radius {clip.Radius:0.##} Å would draw about {expected:0} atoms, more than "
+                + $"{ceiling}; showing one cell.");
+        }
+        (long atoms, long polyhedra) = context.CountSphere(clip.Center, clip.Radius, ceiling);
+        if (CostOf(atoms, polyhedra) > ceiling)
+            return context.Build(One, SphereWarning(clip.Radius, atoms, polyhedra, ceiling));
+        CrystalScene scene = context.Build(One, null, clip);
+        if (CostOf(scene) <= ceiling)
+            return scene;
+        return context.Build(One, SphereWarning(clip.Radius, scene.AtomCount, scene.PolyhedronCount, ceiling));
     }
 
     /// <summary>
@@ -676,12 +808,73 @@ public sealed class CrystalSceneBuilder
             }
         }
 
+        /// <summary>
+        /// The images <see cref="BlockImages"/> gives, counted without listing them, and the polyhedra around them: per
+        /// axis, n images, and one more on the far face for an atom with coordinate 0 when the boundary atoms are drawn.
+        /// </summary>
+        public (long Atoms, long Polyhedra) CountBlock(LatticeShift n)
+        {
+            var images = new long[reduced.Length];
+            long atoms = 0;
+            for (int i = 0; i < reduced.Length; i++)
+            {
+                Reduced r = reduced[i];
+                images[i] = Along(r.X, n.A) * Along(r.Y, n.B) * Along(r.Z, n.C);
+                atoms += images[i];
+            }
+            return (atoms, CountPolyhedra(images));
+
+            long Along(double coordinate, int size)
+                => size + (options.ShowBoundaryAtoms && OnBlock(coordinate, size, size) ? 1L : 0L);
+        }
+
+        /// <summary>Atoms per cell times the volume of a sphere of <paramref name="radius"/> over the cell volume.</summary>
+        public double ExpectedInSphere(double radius)
+            => structure.Atoms.Count * 4 * Math.PI * radius * radius * radius / (3 * basis.Volume);
+
+        /// <summary>
+        /// The images <see cref="SphereImages"/> gives, counted, and the polyhedra around them; a sphere expected past four
+        /// times <paramref name="ceiling"/> is not walked, and counts as its expectation with no polyhedra.
+        /// </summary>
+        public (long Atoms, long Polyhedra) CountSphere(FractionalPoint center, double radius, int ceiling)
+        {
+            double expected = ExpectedInSphere(radius);
+            if (expected > 4.0 * ceiling)
+                return ((long)Math.Min(long.MaxValue / 2, Math.Ceiling(expected)), 0);
+            var images = new long[reduced.Length];
+            ForEachInSphere(center, radius, (i, _) => images[i]++);
+            return (images.Sum(), CountPolyhedra(images));
+        }
+
+        /// <summary>
+        /// The polyhedra drawn around <paramref name="images"/> images of each atom: each enabled, visible and valid
+        /// polyhedron once per image of its center, before the length limits.
+        /// </summary>
+        long CountPolyhedra(long[] images)
+        {
+            if (!polyhedra)
+                return 0;
+            long count = 0;
+            IReadOnlyList<CrystalPolyhedron> list = structure.Polyhedra;
+            for (int k = 0; k < list.Count; k++)
+            {
+                if (options.EnabledPolyhedra is { } enabled && !enabled.Contains(k))
+                    continue;
+                if (polyhedronStyle[k].Visible == false || !IsValid(list[k]))
+                    continue;
+                count += images[list[k].Center];
+            }
+            return count;
+        }
+
         /// <summary>Every image of every atom within the sphere, in atom order and then by translation.</summary>
         void SphereImages(SphereClip sphere, List<(int Atom, LatticeShift Image)> own)
+            => ForEachInSphere(sphere.Center, sphere.Radius, (i, t) => own.Add((i, t)));
+
+        void ForEachInSphere(FractionalPoint c, double radius, Action<int, LatticeShift> add)
         {
             (double ra, double rb, double rc) = basis.ReciprocalLengths();
-            FractionalPoint c = sphere.Center;
-            double limit = sphere.Radius + SphereTolerance;
+            double limit = radius + SphereTolerance;
             (int a0, int a1) = SphereSpan(c.X, limit, ra);
             (int b0, int b1) = SphereSpan(c.Y, limit, rb);
             (int c0, int c1) = SphereSpan(c.Z, limit, rc);
@@ -693,7 +886,7 @@ public sealed class CrystalSceneBuilder
                         for (int k = c0; k <= c1; k++)
                         {
                             if (basis.Distance(r.X + a - c.X, r.Y + b - c.Y, r.Z + k - c.Z) <= limit)
-                                own.Add((i, new LatticeShift(a, b, k)));
+                                add(i, new LatticeShift(a, b, k));
                         }
             }
         }

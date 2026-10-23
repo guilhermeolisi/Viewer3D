@@ -56,6 +56,12 @@
   every image together and with no faded neighbor left behind; `ShowAll()` keeps them.
   `CrystalBondExpansion.EquivalentSources` gives the sources that draw the same bonds after the expansion (the same two
   sites, either direction, the same distance), so removing one removes them all.
+- `Viewer3D.Crystal`: the repetition is no longer limited to 3 cells per axis; `CrystalSceneOptions.MaxCost` (default
+  `MaxAtoms`, 3000) bounds the cost of a scene, its spheres plus `PolyhedronCost` per polyhedron.
+  `CrystalSceneBuilder.Estimate` counts the cost without building and gives the block or radius that fits
+  (`CrystalSceneEstimate`), and `TryBuild` builds only within the ceiling. A block far past the ceiling is no longer
+  built before falling back to one cell.
+- `Viewer3D.Sample`: `--bench-cost 3000,6000,...` times the build and the frame of fluorite blocks of those costs.
 
 ## 0.1.0 - 10/17/2026
 

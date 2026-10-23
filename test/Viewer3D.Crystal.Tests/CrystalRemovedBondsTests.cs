@@ -102,6 +102,19 @@ public class CrystalRemovedBondsTests
     }
 
     [Fact]
+    public void SharedPair_IsStillDrawnByTheOtherSource()
+    {
+        // The Si-O given in both directions with two sources: removing the first leaves the rod, picked as the second.
+        CrystalStructure trio = Trio();
+        CrystalStructure s = trio with { Bonds = [trio.Bonds[0], new CrystalBond(1, 0, LatticeShift.Zero) { SourceIndex = 5 }] };
+
+        CrystalScene scene = Builder.Build(s, Plain, Removing(0));
+
+        RodItem rod = Assert.Single(scene.Scene.Items.OfType<RodItem>());
+        Assert.Equal(1, scene.Lookup(rod.Id)!.BondIndex);
+    }
+
+    [Fact]
     public void SourceMinusOne_NeverRemoved()
     {
         CrystalScene scene = Builder.Build(Trio(firstSource: -1, secondSource: -1), Plain, Removing(-1));

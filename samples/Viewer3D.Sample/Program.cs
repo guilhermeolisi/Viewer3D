@@ -5,6 +5,8 @@
 //        Viewer3D.Sample --bench-polyhedra N  times a frame of N translucent octahedra (run in Release)
 //        Viewer3D.Sample --bench-appearance N times the scene build of fluorite with up to N atoms, plain and with
 //                                             an appearance full of rules (run in Release)
+//        Viewer3D.Sample --bench-cost 3000,6000 times the build and the frame of fluorite blocks of those costs, to set a
+//                                             cost ceiling (run in Release)
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -42,6 +44,16 @@ internal static class Program
         {
             builder.SetupWithoutStarting();
             AppearanceBench.Run(appearance + 1 < args.Length && int.TryParse(args[appearance + 1], out int n) ? n : CrystalSceneOptions.MaxAtoms);
+            return 0;
+        }
+        int cost = Array.IndexOf(args, "--bench-cost");
+        if (cost >= 0)
+        {
+            builder.SetupWithoutStarting();
+            int[] costs = cost + 1 < args.Length
+                ? [.. args[cost + 1].Split(',').Select(x => int.TryParse(x, out int c) ? c : 0).Where(c => c > 0)]
+                : [];
+            CostBench.Run(costs.Length > 0 ? costs : [3000, 6000, 12000, 24000]);
             return 0;
         }
         int export = Array.IndexOf(args, "--export");

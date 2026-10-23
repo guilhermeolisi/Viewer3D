@@ -46,32 +46,61 @@ public enum CrystalClip
 /// <summary>A point in fractional coordinates of the cell.</summary>
 public readonly record struct FractionalPoint(double X, double Y, double Z);
 
+/// <summary>
+/// The cost of a scene counted before building it (<see cref="CrystalSceneBuilder.Estimate"/>): the images of the block
+/// and of its far faces, or of the sphere, and the polyhedra around them, before any atom is hidden and without the faded
+/// neighbors, so the scene built may cost less (hidden atoms) or more (faded neighbors).
+/// </summary>
+/// <param name="Atoms">Images counted.</param>
+/// <param name="Polyhedra">Polyhedra counted, around the images of their centers.</param>
+/// <param name="Cost"><paramref name="Atoms"/> plus <see cref="CrystalSceneOptions.PolyhedronCost"/> per polyhedron.</param>
+/// <param name="Ceiling">The ceiling it was held against, <see cref="CrystalSceneOptions.MaxCost"/>.</param>
+/// <param name="Fits">
+/// In a block, the repetition that fits: the one asked when it fits, else the one asked with its largest axis taken down
+/// one cell at a time until it fits, or 1 x 1 x 1. In a sphere, 1 x 1 x 1.
+/// </param>
+/// <param name="FitsRadius">
+/// In a sphere, the radius that fits: the one asked when it fits, else the largest multiple of 0.5 angstrom below it that
+/// fits, or 0 when none does. In a block, NaN.
+/// </param>
+public sealed record CrystalSceneEstimate(int Atoms, int Polyhedra, int Cost, int Ceiling, LatticeShift Fits, double FitsRadius)
+{
+    /// <summary>Whether the cost is within the ceiling.</summary>
+    public bool Fit => Cost <= Ceiling;
+}
+
 /// <summary>Options of <see cref="CrystalSceneBuilder.Build(CrystalStructure, CrystalSceneOptions, CrystalAppearance?)"/>.</summary>
 public sealed record CrystalSceneOptions
 {
     /// <summary>
-    /// Ceiling on the spheres of a scene. A repetition that goes past it falls back to one cell and the scene carries a
-    /// <see cref="CrystalScene.Warning"/>.
+    /// Default of <see cref="MaxCost"/>, the ceiling on the cost of a scene. A repetition or a sphere that goes past it
+    /// falls back to one cell and the scene carries a <see cref="CrystalScene.Warning"/>.
     /// </summary>
     public const int MaxAtoms = 3000;
 
     /// <summary>
-    /// What one polyhedron counts for against <see cref="MaxAtoms"/>, in spheres: its faces and edges cost about as
-    /// much to prepare and paint as this many spheres. Provisional, to be set from the polyhedra benchmark.
+    /// What one polyhedron counts for against the ceiling, in spheres: its faces and edges cost about as much to prepare
+    /// and paint as this many spheres. Provisional, to be set from the polyhedra benchmark.
     /// </summary>
     public const int PolyhedronCost = 8;
 
     /// <summary>Drawing style.</summary>
     public CrystalStyle Style { get; init; } = CrystalStyle.BallAndStick;
 
-    /// <summary>Cells along a, 1 to 3.</summary>
+    /// <summary>Cells along a, at least 1; the cost ceiling (<see cref="MaxCost"/>) bounds the block.</summary>
     public int RepeatA { get; init; } = 1;
 
-    /// <summary>Cells along b, 1 to 3.</summary>
+    /// <summary>Cells along b, at least 1; the cost ceiling (<see cref="MaxCost"/>) bounds the block.</summary>
     public int RepeatB { get; init; } = 1;
 
-    /// <summary>Cells along c, 1 to 3.</summary>
+    /// <summary>Cells along c, at least 1; the cost ceiling (<see cref="MaxCost"/>) bounds the block.</summary>
     public int RepeatC { get; init; } = 1;
+
+    /// <summary>
+    /// Ceiling on the cost of a scene: its spheres plus <see cref="PolyhedronCost"/> per polyhedron. A value below 1
+    /// takes <see cref="MaxAtoms"/>. <see cref="CrystalSceneBuilder.Estimate"/> gives the cost before building.
+    /// </summary>
+    public int MaxCost { get; init; } = MaxAtoms;
 
     /// <summary>
     /// Block of cells or sphere around a point. In <see cref="CrystalClip.Sphere"/> the repetition and
