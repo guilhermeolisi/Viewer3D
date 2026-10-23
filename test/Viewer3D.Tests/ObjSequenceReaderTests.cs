@@ -62,6 +62,28 @@ public class ObjSequenceReaderTests
     }
 
     [Fact]
+    public void Read_SortsByFileName_NotByTheFolder()
+    {
+        // Frame 1 sits in a folder whose name sorts after the folder of frame 2.
+        string folder = Folder();
+        string late = Directory.CreateDirectory(Path.Combine(folder, "z")).FullName;
+        string early = Directory.CreateDirectory(Path.Combine(folder, "a")).FullName;
+        File.WriteAllText(Path.Combine(late, "frame_1.obj"), Triangle(1));
+        File.WriteAllText(Path.Combine(early, "frame_2.obj"), Triangle(2));
+        try
+        {
+            SceneSequence sequence = ObjSequenceReader.Read([Path.Combine(early, "frame_2.obj"), Path.Combine(late, "frame_1.obj")],
+                Tenth, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal([1f, 2f], sequence.Frames.Select(FirstX));
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [Fact]
     public void ABrokenFile_IsRefusedWithItsName()
     {
         string folder = Folder(("step_1.obj", Triangle(1)), ("step_2.obj", "v 0 0 0\nv 1 0\nf 1 2 3\n"), ("step_3.obj", Triangle(3)));

@@ -95,7 +95,7 @@ public class XyzTrajectoryReaderTests
     [Fact]
     public void ExtendedXyz_RotatedLattice_UsesTheVectorsAsGiven()
     {
-        // b along x and a along y, c along -z: (2,5; 1; -3) is (0,25; 0,5; 0,5) of a 4 x 5 x 6 cell.
+        // b along x and a along y, c along -z: (2.5, 1, -3) is (0.25, 0.5, 0.5) of a 4 x 5 x 6 cell.
         string text = "2\nLattice=\"0 4 0 5 0 0 0 0 -6\" Properties=pos:R:3:Z:I:1\n2.5 1 -3 11\n2.5 3 -3 17\n";
 
         CrystalStructure s = Assert.Single(Read(text).Frames).Structure;
@@ -200,5 +200,26 @@ public class XyzTrajectoryReaderTests
         CrystalScene molecule = builder.Build(water.Frames[1].Structure, options, CrystalAppearance.Default with { ShowCell = false });
         Assert.Equal(2, molecule.Scene.Items.Select(i => molecule.Lookup(i.Id)).Where(i => i?.Kind == CrystalItemKind.Bond)
             .Select(i => i!.BondIndex).Distinct().Count());
+    }
+
+    [Fact]
+    public void ReadThenSequenced_EveryFrameOfTheSequenceDrawsEveryBond()
+    {
+        // The rods are counted in the frames ToSequence returns, each id resolved by a build with the options it applies.
+        var builder = new CrystalSceneBuilder();
+        var options = new CrystalSceneOptions { IncludeLabels = false, ShowBoundaryAtoms = false, CompleteCoordination = false };
+        CrystalTrajectory water = Read(Water);
+        CrystalTrajectory salt = Read(SaltExtended);
+        CrystalSceneOptions whole = options with { CompleteCoordination = true };
+
+        SceneSequence waterFrames = water.ToSequence(builder, options, cancellationToken: TestContext.Current.CancellationToken);
+        SceneSequence saltFrames = salt.ToSequence(builder, whole, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(water.Frames.Count, waterFrames.Frames.Count);
+        for (int k = 0; k < water.Frames.Count; k++)
+            Assert.Equal(2, TrajectoryBonds.InFrame(builder, water.Frames[k], options, waterFrames.Frames[k]));
+        Assert.Equal(salt.Frames.Count, saltFrames.Frames.Count);
+        for (int k = 0; k < salt.Frames.Count; k++)
+            Assert.Equal(24, TrajectoryBonds.InFrame(builder, salt.Frames[k], whole, saltFrames.Frames[k]));
     }
 }

@@ -251,4 +251,25 @@ public class AxsfReaderTests
                 .Select(i => i!.BondIndex).Distinct().Count());
         }
     }
+
+    [Fact]
+    public void ReadThenSequenced_EveryStepOfTheSequenceDrawsEveryBond()
+    {
+        // The rods are counted in the frames ToSequence returns, each id resolved by a build with the options it applies.
+        var builder = new CrystalSceneBuilder();
+        var options = new CrystalSceneOptions { IncludeLabels = false, ShowBoundaryAtoms = false, CompleteCoordination = false };
+        CrystalTrajectory salt = Read(SaltFixedCell);
+        CrystalTrajectory water = Read(WaterMolecule);
+        CrystalSceneOptions whole = options with { CompleteCoordination = true };
+
+        SceneSequence saltFrames = salt.ToSequence(builder, whole, cancellationToken: TestContext.Current.CancellationToken);
+        SceneSequence waterFrames = water.ToSequence(builder, options, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, saltFrames.Frames.Count);
+        for (int k = 0; k < salt.Frames.Count; k++)
+            Assert.Equal(24, TrajectoryBonds.InFrame(builder, salt.Frames[k], whole, saltFrames.Frames[k]));
+        Assert.Equal(water.Frames.Count, waterFrames.Frames.Count);
+        for (int k = 0; k < water.Frames.Count; k++)
+            Assert.Equal(2, TrajectoryBonds.InFrame(builder, water.Frames[k], options, waterFrames.Frames[k]));
+    }
 }

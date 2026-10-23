@@ -11,7 +11,7 @@ namespace Viewer3D;
 /// </summary>
 public static class ObjSequenceReader
 {
-    /// <summary>Reads the given files as the frames of an animation, sorted by name.</summary>
+    /// <summary>Reads the given files as the frames of an animation, sorted by file name (not by folder).</summary>
     /// <param name="paths">The OBJ files; at least two.</param>
     /// <param name="frameDuration">How long each frame stays on screen. Positive.</param>
     /// <param name="options">Limits of each file; null uses <see cref="ObjReadOptions.Default"/>.</param>
@@ -29,7 +29,8 @@ public static class ObjSequenceReader
         ArgumentNullException.ThrowIfNull(paths);
         if (frameDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(frameDuration), "A frame lasts a positive time.");
-        string[] files = [.. paths.Order(NaturalOrder.Comparer)];
+        // By the file name, so a folder never decides the order; the whole path only breaks a tie.
+        string[] files = [.. paths.OrderBy(p => Path.GetFileName(p) ?? p, NaturalOrder.Comparer).ThenBy(p => p, NaturalOrder.Comparer)];
         if (files.Length < 2)
             throw new ObjReadException(ObjReadError.TooFewFrames, string.Format(CultureInfo.InvariantCulture,
                 "An animation needs at least two OBJ files; {0} found.", files.Length), count: files.Length, limit: 2);

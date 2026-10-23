@@ -27,7 +27,7 @@ public class CrystalTrajectoryTests
         CrystalStructure first = trajectory.Frames[0].Structure, second = trajectory.Frames[1].Structure;
         Assert.False(trajectory.Frames[0].IsPeriodic);
         Assert.Equal(first.Cell, second.Cell);
-        // x from -0,757 to 3,757, y from 0 to 0,586, z 0: the extents plus 1 A on each side.
+        // x from -0.757 to 3.757, y from 0 to 0.586, z 0: the extents plus 1 A on each side.
         Assert.Equal(3 + 2 * 0.9572 * Math.Sin(104.52 / 2 * Math.PI / 180) + 2, first.Cell.A, 1e-9);
         Assert.Equal(0.9572 * Math.Cos(104.52 / 2 * Math.PI / 180) + 2, first.Cell.B, 1e-9);
         Assert.Equal(2, first.Cell.C, 1e-9);
@@ -41,7 +41,7 @@ public class CrystalTrajectoryTests
     [Fact]
     public void Lattice_GivesFractionalCoordinatesByTheVectorsAsGiven()
     {
-        // b along x and a along y (right-handed with c along -z): a Cartesian (2,5; 1; -3) is (0,25; 0,5; 0,5).
+        // b along x and a along y (right-handed with c along -z): a Cartesian (2.5, 1, -3) is (0.25, 0.5, 0.5).
         double[] lattice = [0, 4, 0, 5, 0, 0, 0, 0, -6];
         var frame = new CartesianFrame(["Na", "Cl"], [2.5, 1, -3, 2.5, 3, -3], lattice);
 
@@ -95,6 +95,19 @@ public class CrystalTrajectoryTests
         Assert.Equal(2, built.Scene.Items.Select(i => built.Lookup(i.Id)).Where(i => i?.Kind == CrystalItemKind.Bond)
             .Select(i => i!.BondIndex).Distinct().Count());
         Assert.Equal(Tenth * 2, sequence.Duration);
+    }
+
+    [Fact]
+    public void ToSequence_OfAMolecule_DrawsBothBondsInEveryFrame()
+    {
+        CrystalTrajectory molecule = Read(Water(0), Water(1));
+        var builder = new CrystalSceneBuilder();
+        var options = new CrystalSceneOptions { IncludeLabels = false, ShowBoundaryAtoms = false, CompleteCoordination = false };
+
+        SceneSequence sequence = molecule.ToSequence(builder, options, cancellationToken: TestContext.Current.CancellationToken);
+
+        for (int k = 0; k < molecule.Frames.Count; k++)
+            Assert.Equal(2, TrajectoryBonds.InFrame(builder, molecule.Frames[k], options, sequence.Frames[k]));
     }
 
     [Fact]

@@ -273,7 +273,7 @@ one by one sums `WeightOf` as it goes and calls `CheckWeight`, so it refuses ear
 ### Frames from files
 
 `ObjSequenceReader.Read(paths, frameDuration)` and `ReadFolder(folder, frameDuration)` read a series of OBJ files, one
-per frame, sorted by `NaturalOrder` (`step_2.obj` before `step_10.obj`). Each file keeps the limits of `ObjReader`, a
+per frame, sorted by `NaturalOrder` of the file names, whatever their folders (`step_2.obj` before `step_10.obj`). Each file keeps the limits of `ObjReader`, a
 file that is refused names itself at the start of the message, and fewer than two files is
 `ObjReadError.TooFewFrames`. Give the meshes the same names and order in every file, so their ids stay the same.
 
