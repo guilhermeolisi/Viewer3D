@@ -403,7 +403,10 @@ public sealed class CrystalSceneBuilder
             if (thermal)
             {
                 int level = ProbabilityScale.Levels.Contains(options.ProbabilityLevel) ? options.ProbabilityLevel : 50;
-                scale = ProbabilityScale.For(level);
+                double magnification = double.IsFinite(options.DisplacementMagnification) && options.DisplacementMagnification > 0
+                    ? options.DisplacementMagnification
+                    : 1;
+                scale = ProbabilityScale.For(level) * magnification;
                 for (int i = 0; i < atoms.Count; i++)
                     shapes[i] = atoms[i].IsVoid ? null : ShapesOf(atoms[i], i);
             }

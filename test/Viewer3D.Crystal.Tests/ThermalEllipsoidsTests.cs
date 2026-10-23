@@ -89,6 +89,39 @@ public class ThermalEllipsoidsTests
         Assert.Equal(CrystalItemKind.Atom, scene.Lookup(e.Id)!.Kind);
     }
 
+    [Theory]
+    [InlineData(2.5, 2.5)]
+    [InlineData(1, 1)]
+    [InlineData(0, 1)]
+    [InlineData(-2, 1)]
+    [InlineData(double.NaN, 1)]
+    public void Magnification_ScalesEveryAxisOnTopOfTheProbabilityFactor(double magnification, double expected)
+    {
+        // Same tensor as above; a magnification that is not finite and positive draws at the probability alone.
+        double[] u = [0.02, 0.02, 0.005, 0.01, 0, 0];
+        CrystalSceneOptions options = Options() with { DisplacementMagnification = magnification };
+
+        CrystalScene scene = Builder.Build(Polonium(new AtomDisplacement(null, u)), options);
+
+        EllipsoidItem e = Assert.Single(scene.Scene.Items.OfType<EllipsoidItem>());
+        float[] lengths = [.. e.Axes.Select(a => a.Length()).Order()];
+        Assert.Equal((float)(expected * 1.5382 * Math.Sqrt(0.005)), lengths[0], 5);
+        Assert.Equal((float)(expected * 1.5382 * Math.Sqrt(0.03)), lengths[2], 5);
+        Assert.Equal(expected * 1.5382, scene.SphereScale, 9);
+    }
+
+    [Fact]
+    public void Magnification_ShouldNotChangeTheMarkers()
+    {
+        // The dashed sphere of an atom with no data and the cube are markers in angstrom, not displacements.
+        CrystalSceneOptions options = Options() with { DisplacementMagnification = 2.5 };
+
+        CrystalScene scene = Builder.Build(Polonium(new AtomDisplacement(null, [0.01, 0.01, -0.002, 0, 0, 0])), options);
+
+        MeshItem cube = Assert.Single(scene.Scene.Items.OfType<MeshItem>());
+        Assert.Equal(0.6f, cube.Positions.Max(p => p.X) - cube.Positions.Min(p => p.X), 5);
+    }
+
     [Fact]
     public void NotPositiveDefinite_IsACube()
     {

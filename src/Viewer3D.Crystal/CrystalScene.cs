@@ -153,6 +153,13 @@ public sealed record CrystalSceneOptions
     public int ProbabilityLevel { get; init; } = 50;
 
     /// <summary>
+    /// Display magnification of the displacement shapes, on top of the factor of <see cref="ProbabilityLevel"/>: 1 draws
+    /// the ellipsoids at their probability, as ORTEP does; a larger value draws them that many times larger, which the
+    /// caption should then say. A value that is not finite and positive takes 1.
+    /// </summary>
+    public double DisplacementMagnification { get; init; } = 1;
+
+    /// <summary>
     /// Radius of the dashed sphere of an atom with no data, and half edge of the cube of a tensor that is not positive
     /// definite, in angstrom.
     /// </summary>
