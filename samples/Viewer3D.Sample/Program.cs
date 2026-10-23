@@ -56,6 +56,7 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(dir, "crystal-space-filling.png"), Scenes.Crystal(CrystalStyle.SpaceFilling).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "crystal-polyhedra-only.png"),
                 Scenes.Crystal(CrystalStyle.Polyhedra, CrystalAppearance.Default with { ShowAtoms = false }).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "crystal-sphere.png"), Scenes.SphereCrystal().RenderToPng(640, 480));
             Console.WriteLine($"Images written to {Path.GetFullPath(dir)}");
             return 0;
         }
@@ -254,5 +255,45 @@ internal static class Scenes
             polyhedra.Add(new CrystalPolyhedron(ca, vertices, faces));
         }
         return structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtoms(structure), Polyhedra = polyhedra };
+    }
+
+    /// <summary>
+    /// Rock salt, NaCl (Fm-3m, a = 5.64 angstrom), as the sphere of radius 6 angstrom around one Cl: the Cl, its 6 Na
+    /// at 2.82, 12 Cl at 3.99, 8 Na at 4.88 and 6 Cl at 5.64 angstrom, with the Na-Cl bonds whose two atoms are inside.
+    /// </summary>
+    public static Viewer3DControl SphereCrystal()
+    {
+        const double a = 5.64;
+        var cell = new CrystalCell(a, a, a, 90, 90, 90);
+        (double, double, double)[] fcc = [(0, 0, 0), (0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0.0)];
+        var atoms = new List<CrystalAtom>();
+        foreach ((double x, double y, double z) in fcc)
+            atoms.Add(new CrystalAtom("Na1", "Na", x, y, z) { SiteIndex = 0, Radius = 1.02 });
+        foreach ((double x, double y, double z) in fcc)
+            atoms.Add(new CrystalAtom("Cl1", "Cl", (x + 0.5) % 1, y, z) { SiteIndex = 1, Radius = 1.81 });
+        // The six Cl around the first Na; the expansion gives the bonds of the other Na.
+        var bonds = new List<CrystalBond>();
+        for (int cl = 4; cl < atoms.Count; cl++)
+            for (int i = -1; i <= 0; i++)
+                for (int j = -1; j <= 0; j++)
+                    for (int k = -1; k <= 0; k++)
+                    {
+                        if (cell.ToCartesian(atoms[cl].X + i, atoms[cl].Y + j, atoms[cl].Z + k).Length() < 3f)
+                            bonds.Add(new CrystalBond(0, cl, new LatticeShift(i, j, k)));
+                    }
+        var structure = new CrystalStructure(cell, atoms, bonds);
+        structure = structure with { Bonds = CrystalBondExpansion.ExtendToEquivalentAtoms(structure) };
+        CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions
+        {
+            Clip = CrystalClip.Sphere,
+            SphereCenter = new FractionalPoint(0.5, 0.5, 0.5),
+            SphereRadius = 6,
+            IncludeLabels = false,
+        });
+        var viewer = new Viewer3DControl { Scene = scene.Scene, AxisDirections = scene.Axes };
+        viewer.Camera!.LookAlong(-structure.Cell.AVector, structure.Cell.CVector);
+        viewer.Camera.Orbit(-35, -25);
+        viewer.Camera.Frame(scene.Scene);
+        return viewer;
     }
 }

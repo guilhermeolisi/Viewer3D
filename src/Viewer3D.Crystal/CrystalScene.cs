@@ -30,6 +30,22 @@ public enum CrystalStyle
     PolyhedraWithEllipsoids,
 }
 
+/// <summary>Which part of the infinite crystal a scene shows. New values go at the end.</summary>
+public enum CrystalClip
+{
+    /// <summary>A block of whole cells, <see cref="CrystalSceneOptions.RepeatA"/> x B x C, with the cell edges.</summary>
+    Cell,
+
+    /// <summary>
+    /// Every atom image within <see cref="CrystalSceneOptions.SphereRadius"/> of
+    /// <see cref="CrystalSceneOptions.SphereCenter"/>, whatever cell it falls in, without cell edges.
+    /// </summary>
+    Sphere,
+}
+
+/// <summary>A point in fractional coordinates of the cell.</summary>
+public readonly record struct FractionalPoint(double X, double Y, double Z);
+
 /// <summary>Options of <see cref="CrystalSceneBuilder.Build(CrystalStructure, CrystalSceneOptions, CrystalAppearance?)"/>.</summary>
 public sealed record CrystalSceneOptions
 {
@@ -56,6 +72,21 @@ public sealed record CrystalSceneOptions
 
     /// <summary>Cells along c, 1 to 3.</summary>
     public int RepeatC { get; init; } = 1;
+
+    /// <summary>
+    /// Block of cells or sphere around a point. In <see cref="CrystalClip.Sphere"/> the repetition and
+    /// <see cref="ShowBoundaryAtoms"/> do not apply, and a bond is drawn only when both of its atoms are in the sphere.
+    /// </summary>
+    public CrystalClip Clip { get; init; } = CrystalClip.Cell;
+
+    /// <summary>Center of the sphere of <see cref="CrystalClip.Sphere"/>, in fractional coordinates.</summary>
+    public FractionalPoint SphereCenter { get; init; } = new(0.5, 0.5, 0.5);
+
+    /// <summary>
+    /// Radius of the sphere of <see cref="CrystalClip.Sphere"/>, in angstrom. An image at this distance from the center
+    /// is inside. A value that is not positive and finite takes 6.
+    /// </summary>
+    public double SphereRadius { get; init; } = 6;
 
     /// <summary>Also draws the atoms on the far faces, edges and corners of the block of cells.</summary>
     public bool ShowBoundaryAtoms { get; init; } = true;

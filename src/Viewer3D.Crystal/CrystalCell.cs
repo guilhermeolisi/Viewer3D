@@ -88,6 +88,23 @@ internal readonly struct CellBasis
             Math.Min(a, Math.Min(b, c)));
     }
 
+    /// <summary>
+    /// Lengths of the reciprocal vectors a*, b* and c* (|b x c| / V and its turns), in 1/angstrom: the spacing of the
+    /// (100), (010) and (001) planes is their inverse. Zero for an invalid cell.
+    /// </summary>
+    public (double A, double B, double C) ReciprocalLengths()
+    {
+        if (!Valid)
+            return (0, 0, 0);
+        double volume = Volume;
+        // a = (m00, 0, 0), b = (m01, m11, 0), c = (m02, m12, m22).
+        double bcx = m11 * m22, bcy = -m01 * m22, bcz = m01 * m12 - m11 * m02;
+        double cay = m22 * m00, caz = -m12 * m00;
+        return (Math.Sqrt(bcx * bcx + bcy * bcy + bcz * bcz) / volume,
+            Math.Sqrt(cay * cay + caz * caz) / volume,
+            1 / m22);
+    }
+
     public void ToCartesian(double x, double y, double z, out double cx, out double cy, out double cz)
     {
         cx = m00 * x + m01 * y + m02 * z;

@@ -124,6 +124,24 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
   (covalent radii past Z 96, colors the Jmol scheme does not list) are estimates, marked `IsEstimated`.
   `CrystalSceneOptions.ElementColors` overrides the colors.
 
+### Sphere around a point
+
+`Clip = CrystalClip.Sphere` shows every atom image within `SphereRadius` angstrom of `SphereCenter` (fractional
+coordinates), whatever cell it falls in, instead of a block of cells. A bond is drawn only when both of its atoms are
+inside, and there are no cell edges; a polyhedron around a center inside is drawn whole, with its outside vertices
+faded. A sphere past 3000 spheres falls back to one cell, with a `Warning`.
+
+```csharp
+CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions
+{
+    Clip = CrystalClip.Sphere,
+    SphereCenter = new FractionalPoint(0.5, 0.5, 0.5),   // a Cl of rock salt
+    SphereRadius = 6,                                     // angstrom: the Cl and its first four shells
+});
+```
+
+![Rock salt, sphere of 6 angstrom around a Cl](docs/images/crystal-sphere.png)
+
 ### Appearance
 
 `CrystalSceneBuilder.Build(structure, options, appearance)` takes a `CrystalAppearance`, an immutable set of look

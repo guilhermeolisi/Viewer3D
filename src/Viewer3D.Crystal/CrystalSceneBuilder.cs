@@ -82,9 +82,11 @@ public sealed class CrystalSceneBuilder
             return new CrystalScene(Scene.Empty, structure.Cell, [], 0, [], 0, "The cell is not valid.",
                 new Dictionary<int, CrystalItemInfo>());
 
+        var context = new Context(structure, options, basis, appearance ?? CrystalAppearance.Default);
+        if (options.Clip == CrystalClip.Sphere)
+            return BuildSphere(structure, options, basis, context);
         var n = new LatticeShift(Math.Clamp(options.RepeatA, 1, 3), Math.Clamp(options.RepeatB, 1, 3),
             Math.Clamp(options.RepeatC, 1, 3));
-        var context = new Context(structure, options, basis, appearance ?? CrystalAppearance.Default);
         CrystalScene scene = context.Build(n, null);
         int cost = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
         if (cost > CrystalSceneOptions.MaxAtoms && n != new LatticeShift(1, 1, 1))
@@ -99,6 +101,55 @@ public sealed class CrystalSceneBuilder
         }
         return scene;
     }
+
+    /// <summary>
+    /// The scene of <see cref="CrystalClip.Sphere"/>; past the ceiling, one cell with a warning. A sphere whose expected
+    /// count (atoms per cell times the sphere volume over the cell volume) is far past the ceiling is not built at all.
+    /// </summary>
+    static CrystalScene BuildSphere(CrystalStructure structure, CrystalSceneOptions options, CellBasis basis, Context context)
+    {
+        FractionalPoint c = options.SphereCenter;
+        var center = new FractionalPoint(Finite(c.X), Finite(c.Y), Finite(c.Z));
+        double radius = double.IsFinite(options.SphereRadius) && options.SphereRadius > 0 ? options.SphereRadius : 6;
+        var one = new LatticeShift(1, 1, 1);
+        double expected = structure.Atoms.Count * 4 * Math.PI * radius * radius * radius / (3 * basis.Volume);
+        if (expected > 4 * CrystalSceneOptions.MaxAtoms)
+        {
+            return context.Build(one, $"A sphere of radius {radius:0.##} Å would draw about {expected:0} atoms, more than "
+                + $"{CrystalSceneOptions.MaxAtoms}; showing one cell.");
+        }
+        CrystalScene scene = context.Build(one, null, new SphereClip(center, radius));
+        int cost = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
+        if (cost <= CrystalSceneOptions.MaxAtoms)
+            return scene;
+        string warning = scene.PolyhedronCount == 0
+            ? $"A sphere of radius {radius:0.##} Å would draw {scene.AtomCount} atoms, more than "
+                + $"{CrystalSceneOptions.MaxAtoms}; showing one cell."
+            : $"A sphere of radius {radius:0.##} Å would draw {scene.AtomCount} atoms and {scene.PolyhedronCount} polyhedra, "
+                + $"more than the {CrystalSceneOptions.MaxAtoms} atoms allowed (a polyhedron counts as "
+                + $"{CrystalSceneOptions.PolyhedronCost}); showing one cell.";
+        return context.Build(one, warning);
+
+        static double Finite(double v) => double.IsFinite(v) ? v : 0.5;
+    }
+
+    /// <summary>
+    /// The cell translations along one axis that can bring an atom of [0, 1) within <paramref name="radius"/> of
+    /// <paramref name="center"/>: the sphere reaches radius times the reciprocal length in fractional units along the
+    /// axis (radius over the plane spacing). An image coordinate r + t, with r in [0, 1), lies in
+    /// [center - reach, center + reach] only for t from ceil(center - reach) - 1 to floor(center + reach).
+    /// </summary>
+    internal static (int Min, int Max) SphereSpan(double center, double radius, double reciprocalLength)
+    {
+        double reach = radius * reciprocalLength;
+        return ((int)Math.Ceiling(center - reach) - 1, (int)Math.Floor(center + reach));
+    }
+
+    /// <summary>The sphere of <see cref="CrystalClip.Sphere"/>, already checked.</summary>
+    internal readonly record struct SphereClip(FractionalPoint Center, double Radius);
+
+    /// <summary>An image this far outside the sphere, in angstrom, still counts as inside.</summary>
+    const double SphereTolerance = 1e-4;
 
     /// <summary>An atom reduced to [0, 1): its position and the translation the reduction took off.</summary>
     internal readonly record struct Reduced(double X, double Y, double Z, LatticeShift Floor);
@@ -303,7 +354,13 @@ public sealed class CrystalSceneBuilder
             return Look(c, faded, style.Opacity);
         }
 
-        public CrystalScene Build(LatticeShift n, string? warning)
+        /// <summary>
+        /// The scene of the block of <paramref name="n"/> cells or, with <paramref name="sphere"/>, of the images inside
+        /// the sphere: all of them count as the block's own, with no far faces, no completion of a bond (a bond with an
+        /// end outside is left out) and no cell edges. A vertex outside the sphere of a polyhedron drawn around a center
+        /// inside is still a faded sphere, so the polyhedron is whole.
+        /// </summary>
+        public CrystalScene Build(LatticeShift n, string? warning, SphereClip? sphere = null)
         {
             IReadOnlyList<CrystalAtom> atoms = structure.Atoms;
             var items = new List<SceneItem>();
@@ -313,25 +370,10 @@ public sealed class CrystalSceneBuilder
             var boundary = new List<(int Atom, LatticeShift Image)>();
             int nextId = 1;
 
-            for (int i = 0; i < atoms.Count; i++)
-            {
-                Reduced r = reduced[i];
-                for (int a = 0; a <= n.A; a++)
-                    for (int b = 0; b <= n.B; b++)
-                        for (int c = 0; c <= n.C; c++)
-                        {
-                            var t = new LatticeShift(a, b, c);
-                            bool isOwn = a < n.A && b < n.B && c < n.C;
-                            if (isOwn)
-                            {
-                                own.Add((i, t));
-                            }
-                            else if (options.ShowBoundaryAtoms && OnBlock(r.X, a, n.A) && OnBlock(r.Y, b, n.B) && OnBlock(r.Z, c, n.C))
-                            {
-                                boundary.Add((i, t));
-                            }
-                        }
-            }
+            if (sphere is { } clip)
+                SphereImages(clip, own);
+            else
+                BlockImages(n, own, boundary);
 
             // Polyhedra: one copy per drawn image of the center. Without the vertices, an image that is a vertex and not a
             // center is left out with its label and rods; without the inner bonds, each copy's center-vertex rod is.
@@ -488,7 +530,7 @@ public sealed class CrystalSceneBuilder
                     bool partnerDrawn = drawn.ContainsKey((other, u));
                     if (!partnerDrawn)
                     {
-                        if (!options.CompleteCoordination || !ownSet.Contains((atom, t)))
+                        if (sphere is not null || !options.CompleteCoordination || !ownSet.Contains((atom, t)))
                             continue;
                         completions.Add((other, u));
                     }
@@ -546,7 +588,7 @@ public sealed class CrystalSceneBuilder
                 };
             }
 
-            if (app.ShowCell)
+            if (app.ShowCell && sphere is null)
                 AddCellEdges(items, n);
 
             if (app.ShowAnnotations)
@@ -595,6 +637,52 @@ public sealed class CrystalSceneBuilder
                 HiddenAtomCount = hiddenCount,
                 ColorLegend = ColorLegend(legend, hiddenCount == 0 ? null : shownAtoms),
             };
+        }
+
+        /// <summary>The images of the block of <paramref name="n"/> cells and, with the boundary atoms, of its far faces.</summary>
+        void BlockImages(LatticeShift n, List<(int Atom, LatticeShift Image)> own, List<(int Atom, LatticeShift Image)> boundary)
+        {
+            for (int i = 0; i < reduced.Length; i++)
+            {
+                Reduced r = reduced[i];
+                for (int a = 0; a <= n.A; a++)
+                    for (int b = 0; b <= n.B; b++)
+                        for (int c = 0; c <= n.C; c++)
+                        {
+                            var t = new LatticeShift(a, b, c);
+                            bool isOwn = a < n.A && b < n.B && c < n.C;
+                            if (isOwn)
+                            {
+                                own.Add((i, t));
+                            }
+                            else if (options.ShowBoundaryAtoms && OnBlock(r.X, a, n.A) && OnBlock(r.Y, b, n.B) && OnBlock(r.Z, c, n.C))
+                            {
+                                boundary.Add((i, t));
+                            }
+                        }
+            }
+        }
+
+        /// <summary>Every image of every atom within the sphere, in atom order and then by translation.</summary>
+        void SphereImages(SphereClip sphere, List<(int Atom, LatticeShift Image)> own)
+        {
+            (double ra, double rb, double rc) = basis.ReciprocalLengths();
+            FractionalPoint c = sphere.Center;
+            double limit = sphere.Radius + SphereTolerance;
+            (int a0, int a1) = SphereSpan(c.X, limit, ra);
+            (int b0, int b1) = SphereSpan(c.Y, limit, rb);
+            (int c0, int c1) = SphereSpan(c.Z, limit, rc);
+            for (int i = 0; i < reduced.Length; i++)
+            {
+                Reduced r = reduced[i];
+                for (int a = a0; a <= a1; a++)
+                    for (int b = b0; b <= b1; b++)
+                        for (int k = c0; k <= c1; k++)
+                        {
+                            if (basis.Distance(r.X + a - c.X, r.Y + b - c.Y, r.Z + k - c.Z) <= limit)
+                                own.Add((i, new LatticeShift(a, b, k)));
+                        }
+            }
         }
 
         string LabelOf(int atom, AtomLabelText text)
