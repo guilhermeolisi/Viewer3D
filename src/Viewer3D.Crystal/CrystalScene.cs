@@ -48,8 +48,9 @@ public readonly record struct FractionalPoint(double X, double Y, double Z);
 
 /// <summary>
 /// The cost of a scene counted before building it (<see cref="CrystalSceneBuilder.Estimate"/>): the images of the block
-/// and of its far faces, or of the sphere, and the polyhedra around them, before any atom is hidden and without the faded
-/// neighbors, so the scene built may cost less (hidden atoms) or more (faded neighbors).
+/// and of its far faces, or of the sphere, and the polyhedra around them. It is a lower bound of the cost of the scene
+/// built: an atom the appearance hides or may hide in some image is left out, the polyhedra are left out when a length
+/// limit may drop some, and the faded neighbors are never counted, so the scene built costs the same or more.
 /// </summary>
 /// <param name="Atoms">Images counted.</param>
 /// <param name="Polyhedra">Polyhedra counted, around the images of their centers.</param>

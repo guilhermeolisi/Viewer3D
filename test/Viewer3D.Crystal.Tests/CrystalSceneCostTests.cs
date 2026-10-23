@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Viewer3D.Crystal.Tests;
 
 public class CrystalSceneCostTests
@@ -112,6 +114,65 @@ public class CrystalSceneCostTests
         Assert.True(scene.PolyhedronCount > 0);
         Assert.Equal(scene.PolyhedronCount, estimate.Polyhedra);
         Assert.Equal(estimate.Atoms + CrystalSceneOptions.PolyhedronCost * estimate.Polyhedra, estimate.Cost);
+    }
+
+    [Fact]
+    public void Build_WithTheAtomsHidden_IsNotRefusedByTheCount()
+    {
+        // 3 x 3 x 3 of Heavy is 3240 images, past the ceiling; with the atoms off the scene draws none, and is built as
+        // asked, as it was before the count existed.
+        CrystalAppearance hidden = CrystalAppearance.Default with { ShowAtoms = false };
+
+        CrystalScene scene = Builder.Build(Heavy(), Repeat(Plain, 3, 3, 3), hidden);
+        CrystalSceneEstimate estimate = Builder.Estimate(Heavy(), Repeat(Plain, 3, 3, 3), hidden);
+
+        Assert.Null(scene.Warning);
+        Assert.Equal(0, scene.AtomCount);
+        Assert.Equal(3240, scene.HiddenAtomCount);
+        Assert.Equal(0, estimate.Cost);
+        Assert.True(estimate.Fit);
+    }
+
+    [Fact]
+    public void Build_WithHalfTheAtomsHiddenByRule_IsNotRefusedByTheCount()
+    {
+        // The first 60 atoms hidden by an atom rule: 3 x 3 x 3 draws 60 x 27 = 1620, under the ceiling.
+        CrystalAppearance half = CrystalAppearance.Default with
+        {
+            ByAtom = Enumerable.Range(0, 60).ToImmutableDictionary(k => k, _ => new AtomStyle { Visible = false }),
+        };
+
+        CrystalScene scene = Builder.Build(Heavy(), Repeat(Plain, 3, 3, 3), half);
+        bool built = Builder.TryBuild(Heavy(), Repeat(Plain, 3, 3, 3), half, out CrystalScene? tried, out CrystalSceneEstimate estimate);
+
+        Assert.Null(scene.Warning);
+        Assert.Equal(1620, scene.AtomCount);
+        Assert.True(built);
+        Assert.Equal(1620, tried!.AtomCount);
+        Assert.Equal(1620, estimate.Cost);
+    }
+
+    [Fact]
+    public void Estimate_NeverPassesTheBuiltCost_WhenARuleOnAnImageOrALengthLimitMayDropSomething()
+    {
+        // A rule on one image leaves its atom out of the count, and a length limit leaves the polyhedra out: the count is
+        // then below the scene built, never above it.
+        CrystalStructure s = Fixtures.FluoriteWithCubes();
+        CrystalSceneOptions options = Repeat(Plain, 2, 2, 1) with { Style = CrystalStyle.Polyhedra, MaxBondLength = 3 };
+        CrystalAppearance oneImage = CrystalAppearance.Default with
+        {
+            ByImage = ImmutableDictionary<AtomImage, AtomStyle>.Empty.Add(new AtomImage(0, new LatticeShift(0, 0, 0)),
+                new AtomStyle { Visible = false }),
+        };
+
+        CrystalSceneEstimate estimate = Builder.Estimate(s, options, oneImage);
+        CrystalScene scene = Builder.Build(s, options, oneImage);
+
+        Assert.Null(scene.Warning);
+        Assert.Equal(0, estimate.Polyhedra);
+        Assert.True(scene.PolyhedronCount > 0);
+        Assert.True(estimate.Cost <= scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount);
+        Assert.Equal(1, scene.HiddenAtomCount);
     }
 
     [Fact]

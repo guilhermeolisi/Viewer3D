@@ -89,7 +89,8 @@ public sealed class CrystalSceneBuilder
         LatticeShift n = RepeatOf(options);
         if (n == One)
             return context.Build(n, null);
-        // A contagem antes da montagem: um bloco muito acima do teto nao chega a ser montado.
+        // Counted before building, so a block far past the ceiling is never built. The count leaves out every atom the
+        // appearance may hide, so it never passes the cost of the scene built: a scene that fits is built as before.
         (long atoms, long polyhedra) = context.CountBlock(n);
         if (CostOf(atoms, polyhedra) > ceiling)
             return context.Build(One, BlockWarning(n, atoms, polyhedra, ceiling));
@@ -667,7 +668,7 @@ public sealed class CrystalSceneBuilder
                     LatticeShift u = t + shift;
                     if (hidden.Contains((other, u)) || IsHidden(other, u))
                         continue;
-                    // Ligacao apagada: antes do par e da esfera esmaecida, para nao reservar um nem deixar a outra.
+                    // A removed bond: skipped before the pair and the faded sphere, so neither is kept for it.
                     if (removed && structure.Bonds[bond].SourceIndex is int source && source >= 0 && app.RemovedBonds.Contains(source))
                         continue;
                     if (limits && !BondPasses(bond, atom, t, other, u))
@@ -815,12 +816,14 @@ public sealed class CrystalSceneBuilder
         public (long Atoms, long Polyhedra) CountBlock(LatticeShift n)
         {
             var images = new long[reduced.Length];
+            bool[] counted = CountedAtoms();
             long atoms = 0;
             for (int i = 0; i < reduced.Length; i++)
             {
                 Reduced r = reduced[i];
                 images[i] = Along(r.X, n.A) * Along(r.Y, n.B) * Along(r.Z, n.C);
-                atoms += images[i];
+                if (counted[i])
+                    atoms += images[i];
             }
             return (atoms, CountPolyhedra(images));
 
@@ -843,16 +846,62 @@ public sealed class CrystalSceneBuilder
                 return ((long)Math.Min(long.MaxValue / 2, Math.Ceiling(expected)), 0);
             var images = new long[reduced.Length];
             ForEachInSphere(center, radius, (i, _) => images[i]++);
-            return (images.Sum(), CountPolyhedra(images));
+            bool[] counted = CountedAtoms();
+            long atoms = 0;
+            for (int i = 0; i < images.Length; i++)
+            {
+                if (counted[i])
+                    atoms += images[i];
+            }
+            return (atoms, CountPolyhedra(images));
+        }
+
+        /// <summary>
+        /// The atoms whose images are all drawn whatever the image: false for an atom the appearance hides or may hide in
+        /// some image (atoms off, a hidden style, a rule on one of its images, a polyhedron center or vertex left out). The
+        /// counts skip those atoms and so never pass the cost of the scene built, which also draws the faded neighbors.
+        /// </summary>
+        bool[] CountedAtoms()
+        {
+            var counted = new bool[reduced.Length];
+            if (!app.ShowAtoms)
+                return counted;
+            Array.Fill(counted, true);
+            for (int i = 0; i < counted.Length; i++)
+            {
+                if (atomStyle[i].Visible == false)
+                    counted[i] = false;
+            }
+            foreach (AtomImage image in app.ByImage.Keys)
+            {
+                if ((uint)image.Atom < (uint)counted.Length)
+                    counted[image.Atom] = false;
+            }
+            if (!polyhedra || (app.ShowPolyhedronCenters && options.ShowPolyhedronVertices))
+                return counted;
+            IReadOnlyList<CrystalPolyhedron> list = structure.Polyhedra;
+            for (int k = 0; k < list.Count; k++)
+            {
+                if (!app.ShowPolyhedronCenters && (uint)list[k].Center < (uint)counted.Length)
+                    counted[list[k].Center] = false;
+                if (options.ShowPolyhedronVertices)
+                    continue;
+                foreach (PolyhedronVertex v in list[k].Vertices)
+                {
+                    if ((uint)v.Atom < (uint)counted.Length)
+                        counted[v.Atom] = false;
+                }
+            }
+            return counted;
         }
 
         /// <summary>
         /// The polyhedra drawn around <paramref name="images"/> images of each atom: each enabled, visible and valid
-        /// polyhedron once per image of its center, before the length limits.
+        /// polyhedron once per image of its center; none when a length limit may drop some of them.
         /// </summary>
         long CountPolyhedra(long[] images)
         {
-            if (!polyhedra)
+            if (!polyhedra || limits)
                 return 0;
             long count = 0;
             IReadOnlyList<CrystalPolyhedron> list = structure.Polyhedra;
