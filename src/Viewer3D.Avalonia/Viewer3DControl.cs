@@ -52,9 +52,10 @@ public sealed class ItemClickedEventArgs(PickResult? pick, Point position, KeyMo
 /// While a gesture lasts the control paints <see cref="LowDetailScene"/>, when given, and goes back to
 /// <see cref="Scene"/> when it ends. Colors come from the resources <c>Viewer3DBackgroundColor</c>,
 /// <c>Viewer3DLabelColor</c>, <c>Viewer3DSelectionColor</c> and <c>Viewer3DAxisColor0</c> to <c>Viewer3DAxisColor2</c> (a Color or a solid brush),
-/// with built-in light and dark defaults.
+/// with built-in light and dark defaults. <see cref="AnimateCamera"/> and <see cref="StartTurntable"/> move the camera
+/// over time; any gesture, or a camera change from elsewhere, stops them.
 /// </summary>
-public class Viewer3DControl : Control
+public partial class Viewer3DControl : Control
 {
     /// <summary>Delay without wheel events after which a wheel gesture ends.</summary>
     public static readonly TimeSpan WheelGestureTimeout = TimeSpan.FromMilliseconds(250);
@@ -296,6 +297,8 @@ public class Viewer3DControl : Control
         base.OnPropertyChanged(change);
         if (change.Property == CameraProperty)
         {
+            // The move belongs to the old camera.
+            StopAnimation();
             if (VisualRoot is not null)
                 Subscribe(change.GetNewValue<Camera?>());
             if (change.GetNewValue<Camera?>() is { } camera)
@@ -324,6 +327,7 @@ public class Viewer3DControl : Control
         ActualThemeVariantChanged -= OnThemeChanged;
         wheelTimer.Stop();
         dragging = panning = wheeling = clicking = false;
+        StopAnimation();
     }
 
     void OnThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
@@ -337,7 +341,14 @@ public class Viewer3DControl : Control
             camera.Changed += OnCameraChanged;
     }
 
-    void OnCameraChanged(object? sender, EventArgs e) => InvalidateVisual();
+    void OnCameraChanged(object? sender, EventArgs e)
+    {
+        // A change that is not an animation frame (a gesture here or in another viewer of the same camera, a frame
+        // call from the owner) wins over the move.
+        if (!applyingAnimation)
+            StopAnimation();
+        InvalidateVisual();
+    }
 
     /// <inheritdoc/>
     public override void Render(DrawingContext context)
@@ -345,7 +356,7 @@ public class Viewer3DControl : Control
         var size = Bounds.Size;
         if (size.Width <= 0 || size.Height <= 0 || Camera is not { } camera)
             return;
-        Scene scene = (IsGestureActive ? LowDetailScene : null) ?? Scene ?? Scene.Empty;
+        Scene scene = (IsGestureActive || IsCameraAnimating ? LowDetailScene : null) ?? Scene ?? Scene.Empty;
         DrawList list = lists[nextList];
         nextList = 1 - nextList;
         // The render thread may still be painting this list from two frames ago.
@@ -400,6 +411,7 @@ public class Viewer3DControl : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        StopAnimation();
         Focus();
         if (e.ClickCount == 2)
         {
@@ -499,6 +511,7 @@ public class Viewer3DControl : Control
         base.OnPointerWheelChanged(e);
         if (Camera is not { } camera || e.Delta.Y == 0)
             return;
+        StopAnimation();
         if (!IsGestureActive)
             GestureStarted?.Invoke(this, EventArgs.Empty);
         wheeling = true;
@@ -517,6 +530,8 @@ public class Viewer3DControl : Control
             return;
         const float step = MathF.PI / 36;
         float w = (float)Bounds.Width, h = (float)Bounds.Height;
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Add or Key.OemPlus or Key.Subtract or Key.OemMinus)
+            StopAnimation();
         switch (e.Key)
         {
             case Key.Left: camera.Rotate(Vector3.UnitY, -step); break;

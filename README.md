@@ -218,6 +218,28 @@ formats the value. `LineItem.Dash` dashes any line.
 
 ![The distance from the center to a corner and the tetrahedral angle](docs/images/measure.png)
 
+## Camera animation
+
+`AnimateCamera(state, duration)` moves the camera to a `CameraState` (orientation, target, view radius) from where it
+is: the orientation along the shorter arc, the target in a straight line and the view radius on a log scale, with a
+smooth start and stop (pass your own easing to change it). A zero duration jumps. `StartTurntable(axis, period)` turns
+the view around a screen axis until `StopTurntable`. Both stop at once on a drag, the wheel, a key, or a camera change
+that does not come from the animation (another viewer of the same camera, a `Frame` call), and when the control leaves
+the visual tree. Frames come from `TopLevel.RequestAnimationFrame`, at most 30 per second, and advance by elapsed
+time; the control paints `LowDetailScene` while it moves and asks for nothing when it stands still. `IsCameraAnimating` tells
+whether a move runs. `CameraAnimation` and `CameraTurntable` are the pure part, usable without Avalonia:
+`camera.Set(animation.StateAt(elapsed))`.
+
+```csharp
+Camera goal = viewer.Camera!.Clone();
+goal.LookAlong(new Vector3(0, 0, -1), Vector3.UnitY);
+viewer.AnimateCamera(goal.State, TimeSpan.FromMilliseconds(300));
+viewer.StartTurntable(Vector3.UnitY, TimeSpan.FromSeconds(8));
+```
+
+| ![Turntable, start](docs/images/turntable-0.png) | ![Turntable, 45 degrees](docs/images/turntable-1.png) | ![Turntable, 90 degrees](docs/images/turntable-2.png) | ![Turntable, 135 degrees](docs/images/turntable-3.png) |
+|---|---|---|---|
+
 ## Theme colors
 
 The control reads these resources (a `Color` or a solid brush), with built-in light and dark defaults:

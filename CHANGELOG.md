@@ -74,6 +74,14 @@
   label).
 - `Viewer3D.Sample`: `--bench-obj 25000,100000,...` times the read and the frame of OBJ spheres of about those
   triangle counts; the sample shows an OBJ mesh and a measurement.
+- `Viewer3D`: `CameraState` (orientation, target, view radius), `Camera.State` and `Camera.Set`, which applies the
+  three with one `Changed`. `CameraAnimation` gives the state of a timed move at any instant (shorter arc, straight
+  target, log-scale radius, smooth step or a given easing) and `CameraTurntable` a never ending turn around a view axis.
+- `Viewer3D.Avalonia`: `Viewer3DControl.AnimateCamera` moves the camera to a state over a duration, and
+  `StartTurntable`/`StopTurntable` turn it continuously; `IsCameraAnimating` tells whether either runs. Frames come from
+  `TopLevel.RequestAnimationFrame`, at most 30 per second and by elapsed time, painting `LowDetailScene`; a drag, the
+  wheel, a key, a camera change from elsewhere or leaving the visual tree stops them.
+- `Viewer3D.Sample`: `--export` also writes four turntable frames.
 
 ## 0.1.0 - 10/17/2026
 

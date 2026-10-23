@@ -83,6 +83,14 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(dir, "crystal-sphere.png"), Scenes.SphereCrystal().RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "mesh-obj.png"), Scenes.Viewer(ObjText.BandedSphere(), null).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "measure.png"), Scenes.Viewer(Scenes.Measured(), null).RenderToPng(640, 480));
+            // Four frames of a turntable, an eighth of a turn apart.
+            Viewer3DControl turning = Scenes.Crystal(CrystalStyle.BallAndStick);
+            var turntable = new CameraTurntable(turning.Camera!.State, Vector3.UnitY, TimeSpan.FromSeconds(8));
+            for (int i = 0; i < 4; i++)
+            {
+                turning.Camera.Set(turntable.StateAt(TimeSpan.FromSeconds(i)));
+                File.WriteAllBytes(Path.Combine(dir, $"turntable-{i}.png"), turning.RenderToPng(320, 240));
+            }
             Console.WriteLine($"Images written to {Path.GetFullPath(dir)}");
             return 0;
         }
