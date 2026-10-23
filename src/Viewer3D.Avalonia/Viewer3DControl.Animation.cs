@@ -93,9 +93,11 @@ public partial class Viewer3DControl
         RequestAnimationFrame(generation);
     }
 
-    void RequestAnimationFrame(int generation)
+    void RequestAnimationFrame(int generation) => RequestFrameCallback(time => OnAnimationFrame(generation, time));
+
+    // One frame for the camera animation or the playback, from the test clock or the top level.
+    void RequestFrameCallback(Action<TimeSpan> callback)
     {
-        Action<TimeSpan> callback = time => OnAnimationFrame(generation, time);
         if (RequestFrame is { } request)
             request(callback);
         else

@@ -127,7 +127,7 @@ public partial class Viewer3DControl : Control
     {
         AffectsRender<Viewer3DControl>(SceneProperty, LowDetailSceneProperty, SelectedItemIdProperty,
             SelectedItemIdsProperty, SceneBackgroundProperty, OutlineWidthProperty,
-            AxisDirectionsProperty, ShowAxisIndicatorProperty, ShowLabelsProperty);
+            AxisDirectionsProperty, ShowAxisIndicatorProperty, ShowLabelsProperty, SequenceProperty, FrameIndexProperty);
         FocusableProperty.OverrideDefaultValue<Viewer3DControl>(true);
         ClipToBoundsProperty.OverrideDefaultValue<Viewer3DControl>(true);
     }
@@ -262,29 +262,48 @@ public partial class Viewer3DControl : Control
     /// <summary>Number of frames prepared for the screen (for tests).</summary>
     internal int PaintCount { get; private set; }
 
-    /// <summary>Frames the camera on the scene, keeping its orientation.</summary>
+    /// <summary>
+    /// Frames the camera on the scene, keeping its orientation. With a <see cref="Sequence"/>, on the bounds of all its
+    /// frames, so the camera does not move from frame to frame.
+    /// </summary>
     public void FrameScene()
     {
-        if (Scene is { } scene && Camera is { } camera)
+        if (Camera is not { } camera)
+            return;
+        if (Sequence is { } sequence)
+            camera.Frame(sequence.Center, sequence.Radius);
+        else if (Scene is { } scene)
             camera.Frame(scene);
     }
 
     /// <summary>
-    /// Paints <see cref="Scene"/> (never the low detail one) into a PNG of <paramref name="width"/> by
-    /// <paramref name="height"/> device-independent pixels, multiplied by <paramref name="scale"/>, with the current
-    /// camera and theme colors.
+    /// Paints <see cref="Scene"/>, or the current frame of <see cref="Sequence"/> (never the low detail one), into a
+    /// PNG of <paramref name="width"/> by <paramref name="height"/> device-independent pixels, multiplied by
+    /// <paramref name="scale"/>, with the current camera and theme colors.
     /// </summary>
     public byte[] RenderToPng(int width, int height, double scale = 1)
     {
+        CheckImageSize(width, height, scale);
+        Camera camera = Camera?.Clone() ?? new Camera();
+        return Paint(CurrentFullScene(), camera, CreateOptions(camera), ShowLabels, width, height, scale);
+    }
+
+    static void CheckImageSize(int width, int height, double scale)
+    {
         if (width <= 0 || height <= 0 || scale <= 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Size and scale must be positive.");
+    }
+
+    // Paints a scene into a PNG; touches nothing of the control, so it runs on any thread.
+    internal static byte[] Paint(Scene scene, Camera camera, PaintOptions options, bool labels, int width, int height,
+        double scale)
+    {
         var info = new SKImageInfo((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale), SKColorType.Rgba8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         SKCanvas canvas = surface.Canvas;
         canvas.Scale((float)scale);
-        Camera camera = Camera?.Clone() ?? new Camera();
-        DrawList list = new FramePreparer { IncludeLabels = ShowLabels }.Prepare(Scene ?? Scene.Empty, camera, width, height);
-        SkiaPainter.Paint(canvas, list, CreateOptions(camera));
+        DrawList list = new FramePreparer { IncludeLabels = labels }.Prepare(scene, camera, width, height);
+        SkiaPainter.Paint(canvas, list, options);
         canvas.Flush();
         using SKImage image = surface.Snapshot();
         using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -295,6 +314,7 @@ public partial class Viewer3DControl : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        OnPlaybackPropertyChanged(change);
         if (change.Property == CameraProperty)
         {
             // The move belongs to the old camera.
@@ -317,6 +337,7 @@ public partial class Viewer3DControl : Control
         base.OnAttachedToVisualTree(e);
         Subscribe(Camera);
         ActualThemeVariantChanged += OnThemeChanged;
+        OnPlaybackAttached();
     }
 
     /// <inheritdoc/>
@@ -328,6 +349,7 @@ public partial class Viewer3DControl : Control
         wheelTimer.Stop();
         dragging = panning = wheeling = clicking = false;
         StopAnimation();
+        OnPlaybackDetached();
     }
 
     void OnThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
@@ -356,7 +378,7 @@ public partial class Viewer3DControl : Control
         var size = Bounds.Size;
         if (size.Width <= 0 || size.Height <= 0 || Camera is not { } camera)
             return;
-        Scene scene = (IsGestureActive || IsCameraAnimating ? LowDetailScene : null) ?? Scene ?? Scene.Empty;
+        Scene scene = SceneToPaint(IsGestureActive || IsCameraAnimating);
         DrawList list = lists[nextList];
         nextList = 1 - nextList;
         // The render thread may still be painting this list from two frames ago.
