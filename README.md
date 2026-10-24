@@ -67,6 +67,22 @@ The `Camera` raises `Changed` on every change, so two viewers that share one cam
 `ItemHovered` reports what is under the pointer, with the triangle and barycentric weights for meshes. `ItemClicked`
 reports what was clicked (or the background) on a left click that did not turn into a drag.
 
+To let the user drag an item, say which ones with `CanDragItem`. A left press on such an item holds the view still,
+and once the pointer moves more than `ClickTolerance` the control raises `ItemDragStarted`, `ItemDragged` on each move
+and `ItemDragCompleted` (with `Canceled` when the pointer capture is lost). Each carries the world ray under the
+pointer; intersect it with the plane the item moves in:
+
+```csharp
+viewer.CanDragItem = id => id == markerId;
+viewer.ItemDragged += (_, e) =>
+{
+    if (e.Ray.TryIntersectPlane(Vector3.Zero, Vector3.UnitZ, out Vector3 hit))
+        MoveMarker(hit);
+};
+```
+
+`Camera.CreateProjector(width, height).Unproject(x, y)` gives the same ray for any screen point.
+
 A `SphereItem` with `Sectors` is painted as wedges from twelve o'clock, clockwise, each in its own color; what the
 fractions leave of the turn stays empty, with the outline of the disc.
 

@@ -115,6 +115,11 @@
   `_0004.png`, named by `SceneSequence.FrameFileName`).
 - `Viewer3D.Sample`: `--bench-sequence-memory N` counts the bytes a frame holds per unit of weight, and
   `--bench-sequence N` times a frame of a sequence of fluorite blocks.
+- `Viewer3D`: `Projector.Unproject` gives the world `Ray` drawn at a screen point, in both projections, and
+  `Projector.ToWorld` undoes `ToView`; `Ray.TryIntersectPlane` places the pointer on a plane.
+- `Viewer3D.Avalonia`: `Viewer3DControl.CanDragItem` marks items that the left button drags instead of rotating the
+  view; `ItemDragStarted`, `ItemDragged` and `ItemDragCompleted` carry the ray under the pointer, and a lost capture
+  ends the drag as canceled. A press that does not move past `ClickTolerance` is still a click.
 
 ## 0.1.0 - 10/17/2026
 

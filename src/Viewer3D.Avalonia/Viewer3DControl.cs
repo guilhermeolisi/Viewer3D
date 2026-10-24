@@ -46,11 +46,33 @@ public sealed class ItemClickedEventArgs(PickResult? pick, Point position, KeyMo
     public KeyModifiers Modifiers { get; } = modifiers;
 }
 
+/// <summary>Arguments of <see cref="Viewer3DControl.ItemDragStarted"/>, <see cref="Viewer3DControl.ItemDragged"/> and
+/// <see cref="Viewer3DControl.ItemDragCompleted"/>.</summary>
+/// <param name="itemId">Identifier of the dragged item, the one under the pointer when the button went down.</param>
+/// <param name="ray">World ray under the pointer, from <see cref="Projector.Unproject"/> with the current camera.</param>
+/// <param name="position">Pointer position in the control.</param>
+/// <param name="canceled">True when the drag ended because the pointer capture was lost, not by a release.</param>
+public sealed class ItemDragEventArgs(int itemId, Ray ray, Point position, bool canceled) : EventArgs
+{
+    /// <summary>Identifier of the dragged item.</summary>
+    public int ItemId { get; } = itemId;
+
+    /// <summary>World ray under the pointer; intersect it with a plane to place the item.</summary>
+    public Ray Ray { get; } = ray;
+
+    /// <summary>Pointer position in the control.</summary>
+    public Point Position { get; } = position;
+
+    /// <summary>True when the drag ended because the pointer capture was lost: the owner should undo the move.</summary>
+    public bool Canceled { get; } = canceled;
+}
+
 /// <summary>
 /// Shows a <see cref="Scene"/> painted by software through Skia. Drag to rotate, right button or Shift and drag to
 /// move, wheel to zoom at the pointer, double click to frame the scene, arrows to rotate and + or - to zoom.
 /// While a gesture lasts the control paints <see cref="LowDetailScene"/>, when given, and goes back to
-/// <see cref="Scene"/> when it ends. Colors come from the resources <c>Viewer3DBackgroundColor</c>,
+/// <see cref="Scene"/> when it ends. Items accepted by <see cref="CanDragItem"/> are dragged instead of rotating the
+/// view. Colors come from the resources <c>Viewer3DBackgroundColor</c>,
 /// <c>Viewer3DLabelColor</c>, <c>Viewer3DSelectionColor</c> and <c>Viewer3DAxisColor0</c> to <c>Viewer3DAxisColor2</c> (a Color or a solid brush),
 /// with built-in light and dark defaults. <see cref="AnimateCamera"/> and <see cref="StartTurntable"/> move the camera
 /// over time; any gesture, or a camera change from elsewhere, stops them.
@@ -119,7 +141,8 @@ public partial class Viewer3DControl : Control
     int nextList;
     DrawList? current;
     Camera? subscribed;
-    bool dragging, panning, wheeling, clicking;
+    bool dragging, panning, wheeling, clicking, itemDragging;
+    int? dragItem;
     Point last, pressed;
     PickResult? lastHover;
 
@@ -247,6 +270,26 @@ public partial class Viewer3DControl : Control
     /// </summary>
     public event EventHandler<ItemClickedEventArgs>? ItemClicked;
 
+    /// <summary>
+    /// Says which items the left button drags instead of rotating the view; null drags none. A press on such an item
+    /// holds the view still; once the pointer moves more than <see cref="ClickTolerance"/>,
+    /// <see cref="ItemDragStarted"/> is raised, then <see cref="ItemDragged"/> on each move and
+    /// <see cref="ItemDragCompleted"/> at the end. Below the tolerance the gesture stays a click.
+    /// </summary>
+    public Func<int, bool>? CanDragItem { get; set; }
+
+    /// <summary>Raised when the drag of an item starts, with the ray under the pointer at that moment.</summary>
+    public event EventHandler<ItemDragEventArgs>? ItemDragStarted;
+
+    /// <summary>Raised on each pointer move while an item is dragged.</summary>
+    public event EventHandler<ItemDragEventArgs>? ItemDragged;
+
+    /// <summary>
+    /// Raised when the drag of an item ends: by a release, or with <see cref="ItemDragEventArgs.Canceled"/> when the
+    /// pointer capture is lost.
+    /// </summary>
+    public event EventHandler<ItemDragEventArgs>? ItemDragCompleted;
+
     /// <summary>Raised when a drag or a wheel gesture starts.</summary>
     public event EventHandler? GestureStarted;
 
@@ -347,7 +390,8 @@ public partial class Viewer3DControl : Control
         Subscribe(null);
         ActualThemeVariantChanged -= OnThemeChanged;
         wheelTimer.Stop();
-        dragging = panning = wheeling = clicking = false;
+        dragging = panning = wheeling = clicking = itemDragging = false;
+        dragItem = null;
         StopAnimation();
         OnPlaybackDetached();
     }
@@ -445,6 +489,11 @@ public partial class Viewer3DControl : Control
         panning = point.Properties.IsRightButtonPressed || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         clicking = point.Properties.IsLeftButtonPressed && !panning;
         last = pressed = point.Position;
+        itemDragging = false;
+        dragItem = null;
+        if (clicking && CanDragItem is { } canDrag && current is not null
+            && Picker.Pick(current, (float)pressed.X, (float)pressed.Y) is { } pick && canDrag(pick.ItemId))
+            dragItem = pick.ItemId;
         e.Pointer.Capture(this);
         bool started = !IsGestureActive;
         dragging = true;
@@ -458,6 +507,21 @@ public partial class Viewer3DControl : Control
     {
         base.OnPointerMoved(e);
         Point p = e.GetPosition(this);
+        if (dragging && dragItem is int item)
+        {
+            // The view holds still under a draggable item, also below the click tolerance.
+            last = p;
+            if (!itemDragging)
+            {
+                if (Point.Distance(p, pressed) <= ClickTolerance)
+                    return;
+                clicking = false;
+                itemDragging = true;
+                ItemDragStarted?.Invoke(this, DragArgs(item, p, false));
+            }
+            ItemDragged?.Invoke(this, DragArgs(item, p, false));
+            return;
+        }
         if (dragging && Camera is { } camera)
         {
             float dx = (float)(p.X - last.X), dy = (float)(p.Y - last.Y);
@@ -488,6 +552,11 @@ public partial class Viewer3DControl : Control
             PickResult? pick = current is null ? null : Picker.Pick(current, (float)p.X, (float)p.Y);
             ItemClicked?.Invoke(this, new ItemClickedEventArgs(pick, p, e.KeyModifiers));
         }
+        if (itemDragging && dragItem is int item)
+        {
+            itemDragging = false;
+            ItemDragCompleted?.Invoke(this, DragArgs(item, p, false));
+        }
         clicking = false;
         // Before releasing the capture, whose loss would end the gesture a second time.
         StopDrag();
@@ -498,8 +567,20 @@ public partial class Viewer3DControl : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        if (itemDragging && dragItem is int item)
+        {
+            itemDragging = false;
+            ItemDragCompleted?.Invoke(this, DragArgs(item, last, true));
+        }
         if (dragging)
             StopDrag();
+    }
+
+    ItemDragEventArgs DragArgs(int item, Point p, bool canceled)
+    {
+        Camera camera = Camera ?? new Camera();
+        Ray ray = camera.CreateProjector((float)Bounds.Width, (float)Bounds.Height).Unproject((float)p.X, (float)p.Y);
+        return new ItemDragEventArgs(item, ray, p, canceled);
     }
 
     /// <inheritdoc/>
@@ -515,7 +596,8 @@ public partial class Viewer3DControl : Control
 
     void StopDrag()
     {
-        dragging = false;
+        dragging = itemDragging = false;
+        dragItem = null;
         if (!wheeling)
             EndGesture();
     }
