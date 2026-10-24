@@ -200,6 +200,33 @@ public readonly struct Projector
     /// <summary>World point to view space.</summary>
     public Vector3 ToView(Vector3 world) => Vector3.Transform(world - target, orientation);
 
+    /// <summary>View-space point back to world space, the inverse of <see cref="ToView"/>.</summary>
+    public Vector3 ToWorld(Vector3 view) => Vector3.Transform(view, Quaternion.Conjugate(orientation)) + target;
+
+    /// <summary>
+    /// The ray of world points drawn at screen pixel (<paramref name="x"/>, <paramref name="y"/>), the inverse of
+    /// <see cref="Project"/>. In perspective it starts at the eye; in orthographic it starts in front of the target at
+    /// the same distance as the perspective eye and runs along the view direction.
+    /// </summary>
+    public Ray Unproject(float x, float y)
+    {
+        float vx = (x - cx) / scale, vy = -(y - cy) / scale;
+        Vector3 origin, direction;
+        if (perspective)
+        {
+            // A view point v is drawn at vx when v.X * eye / (eye - v.Z) = vx: the line from the eye through (vx, vy, 0).
+            origin = new Vector3(0, 0, eye);
+            direction = Vector3.Normalize(new Vector3(vx, vy, -eye));
+        }
+        else
+        {
+            origin = new Vector3(vx, vy, eye);
+            direction = -Vector3.UnitZ;
+        }
+        Quaternion back = Quaternion.Conjugate(orientation);
+        return new Ray(ToWorld(origin), Vector3.Normalize(Vector3.Transform(direction, back)));
+    }
+
     /// <summary>
     /// Projects a view-space point. Returns false when the point is behind the eye (perspective only).
     /// <paramref name="factor"/> is the size multiplier at that depth (1 in orthographic).
