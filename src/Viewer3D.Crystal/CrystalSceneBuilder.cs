@@ -9,6 +9,11 @@ namespace Viewer3D.Crystal;
 /// </summary>
 /// <remarks>
 /// <para>
+/// With <see cref="CrystalClip.Finite"/>, the supplied positions are kept as given: one image per atom, without
+/// periodic completion. The cell still supplies the axes and the unit-cell outline. A set above the cost ceiling is
+/// refused rather than replaced by a periodic cell.
+/// </para>
+/// <para>
 /// Positions are reduced to [0, 1) first, and a bond keeps its length: the cell translation that the reduction takes
 /// off each end is put back into the bond. The block is <c>RepeatA x RepeatB x RepeatC</c> cells. Each atom has one
 /// image per cell of the block, and those images carry the labels. With <see cref="CrystalSceneOptions.ShowBoundaryAtoms"/>
@@ -84,6 +89,19 @@ public sealed class CrystalSceneBuilder
 
         var context = new Context(structure, options, basis, appearance ?? CrystalAppearance.Default);
         int ceiling = CeilingOf(options);
+        if (options.Clip == CrystalClip.Finite)
+        {
+            CrystalSceneEstimate estimate = EstimateWith(context, options, ceiling);
+            if (estimate.Fit)
+            {
+                CrystalScene finite = context.Build(One, null);
+                if (CostOf(finite) <= ceiling)
+                    return finite;
+                estimate = estimate with { Cost = CostOf(finite) };
+            }
+            return new CrystalScene(Scene.Empty, structure.Cell, [], 0, [], 0,
+                $"The finite structure exceeds the scene budget ({estimate.Cost} of {ceiling}). Reduce the number of atoms or raise MaxCost.", new Dictionary<int, CrystalItemInfo>());
+        }
         if (options.Clip == CrystalClip.Sphere)
             return BuildSphere(options, context, ceiling);
         LatticeShift n = RepeatOf(options);
@@ -170,7 +188,8 @@ public sealed class CrystalSceneBuilder
     static int CeilingOf(CrystalSceneOptions options) => options.MaxCost >= 1 ? options.MaxCost : CrystalSceneOptions.MaxAtoms;
 
     static LatticeShift RepeatOf(CrystalSceneOptions options)
-        => new(Math.Max(1, options.RepeatA), Math.Max(1, options.RepeatB), Math.Max(1, options.RepeatC));
+        => options.Clip == CrystalClip.Finite ? One
+            : new(Math.Max(1, options.RepeatA), Math.Max(1, options.RepeatB), Math.Max(1, options.RepeatC));
 
     /// <summary>The sphere of the options, with a center that is not finite at 0.5 and a radius that is not positive at 6.</summary>
     static SphereClip SphereOf(CrystalSceneOptions options)
@@ -370,7 +389,9 @@ public sealed class CrystalSceneBuilder
             for (int i = 0; i < atoms.Count; i++)
             {
                 CrystalAtom atom = atoms[i];
-                reduced[i] = Reduce(atom.X, atom.Y, atom.Z);
+                reduced[i] = options.Clip == CrystalClip.Finite
+                    ? new Reduced(atom.X, atom.Y, atom.Z, LatticeShift.Zero)
+                    : Reduce(atom.X, atom.Y, atom.Z);
                 string main = MainElement(atom);
                 radius[i] = CrystalPacking.RadiusOf(atom);
                 atomStyle[i] = app.ResolveAtom(structure, i);
@@ -418,7 +439,7 @@ public sealed class CrystalSceneBuilder
             else
             {
                 scale = options.Style == CrystalStyle.SpaceFilling
-                    ? CrystalPacking.TouchingScale(structure, basis, reduced, radius)
+                    ? CrystalPacking.TouchingScale(structure, basis, reduced, radius, options.Clip != CrystalClip.Finite)
                     : options.BallScale;
             }
         }
@@ -645,7 +666,7 @@ public sealed class CrystalSceneBuilder
 
             // A vertex outside the block, of any copy (around a block center or a far-face one): a faded sphere.
             var completions = new HashSet<(int, LatticeShift)>();
-            if (options.CompleteCoordination && options.ShowPolyhedronVertices)
+            if (options.Clip != CrystalClip.Finite && options.CompleteCoordination && options.ShowPolyhedronVertices)
             {
                 foreach (PolyhedronInstance p in instances)
                 {
@@ -684,7 +705,7 @@ public sealed class CrystalSceneBuilder
                     bool partnerDrawn = drawn.ContainsKey((other, u));
                     if (!partnerDrawn)
                     {
-                        if (sphere is not null || !options.CompleteCoordination || !ownSet.Contains((atom, t)))
+                        if (sphere is not null || options.Clip == CrystalClip.Finite || !options.CompleteCoordination || !ownSet.Contains((atom, t)))
                             continue;
                         completions.Add((other, u));
                     }
@@ -796,6 +817,12 @@ public sealed class CrystalSceneBuilder
         /// <summary>The images of the block of <paramref name="n"/> cells and, with the boundary atoms, of its far faces.</summary>
         void BlockImages(LatticeShift n, List<(int Atom, LatticeShift Image)> own, List<(int Atom, LatticeShift Image)> boundary)
         {
+            if (options.Clip == CrystalClip.Finite)
+            {
+                for (int i = 0; i < reduced.Length; i++)
+                    own.Add((i, LatticeShift.Zero));
+                return;
+            }
             for (int i = 0; i < reduced.Length; i++)
             {
                 Reduced r = reduced[i];
@@ -823,6 +850,8 @@ public sealed class CrystalSceneBuilder
         /// </summary>
         public (long Atoms, long Polyhedra) CountBlock(LatticeShift n)
         {
+            if (options.Clip == CrystalClip.Finite)
+                return CountFinite();
             var images = new long[reduced.Length];
             bool[] counted = CountedAtoms();
             long atoms = 0;
@@ -837,6 +866,24 @@ public sealed class CrystalSceneBuilder
 
             long Along(double coordinate, int size)
                 => size + (options.ShowBoundaryAtoms && OnBlock(coordinate, size, size) ? 1L : 0L);
+        }
+
+        (long Atoms, long Polyhedra) CountFinite()
+        {
+            var own = new List<(int Atom, LatticeShift Image)>();
+            BlockImages(One, own, []);
+            List<PolyhedronInstance> instances = polyhedra ? Instances(own, []) : [];
+            var centers = instances.Select(p => p.Center).ToHashSet();
+            var hiddenVertices = new HashSet<int>();
+            if (!options.ShowPolyhedronVertices)
+                foreach (PolyhedronInstance p in instances)
+                    foreach ((int atom, _) in p.Vertices)
+                        if (!centers.Contains(atom))
+                            hiddenVertices.Add(atom);
+            long count = !app.ShowAtoms ? 0 : own.LongCount(a =>
+                Style(a.Atom, LatticeShift.Zero).Visible != false && !hiddenVertices.Contains(a.Atom)
+                && (app.ShowPolyhedronCenters || !centers.Contains(a.Atom)));
+            return (count, instances.Count);
         }
 
         /// <summary>Atoms per cell times the volume of a sphere of <paramref name="radius"/> over the cell volume.</summary>
@@ -1162,6 +1209,8 @@ public sealed class CrystalSceneBuilder
             foreach (PolyhedronVertex v in vertices)
             {
                 if ((uint)v.Atom >= (uint)count)
+                    return false;
+                if (options.Clip == CrystalClip.Finite && v.Shift != LatticeShift.Zero)
                     return false;
             }
             foreach (int[] face in faces)

@@ -72,7 +72,13 @@ public sealed class CrystalTrajectory
         ArgumentNullException.ThrowIfNull(options);
         appearance ??= CrystalAppearance.Default;
         CrystalAppearance boxed = appearance with { ShowCell = false };
-        CrystalSceneOptions molecule = options with { RepeatA = 1, RepeatB = 1, RepeatC = 1, Clip = CrystalClip.Cell };
+        CrystalSceneOptions molecule = options with
+        {
+            RepeatA = 1,
+            RepeatB = 1,
+            RepeatC = 1,
+            Clip = options.Clip == CrystalClip.Finite ? CrystalClip.Finite : CrystalClip.Cell,
+        };
         bool light = lowDetail && options.Style is CrystalStyle.ThermalEllipsoids or CrystalStyle.Polyhedra or CrystalStyle.PolyhedraWithEllipsoids;
 
         // Before building: the atoms each frame will have at least, once or twice (with the low detail version).

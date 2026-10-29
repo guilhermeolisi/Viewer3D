@@ -43,6 +43,12 @@ public enum CrystalClip
     /// <see cref="CrystalSceneOptions.SphereCenter"/>, whatever cell it falls in, without cell edges.
     /// </summary>
     Sphere,
+
+    /// <summary>
+    /// The supplied finite set of atoms, at their given fractional coordinates. No wrapping, repetition, boundary
+    /// images or periodic completion is applied. The cell remains the crystallographic unit cell.
+    /// </summary>
+    Finite,
 }
 
 /// <summary>A point in fractional coordinates of the cell.</summary>

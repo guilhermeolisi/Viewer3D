@@ -18,6 +18,9 @@ public sealed record CrystalCell(double A, double B, double C, double Alpha, dou
     /// <summary>Cartesian position, in angstrom, of the fractional coordinates (x, y, z).</summary>
     public Vector3 ToCartesian(double x, double y, double z) => Basis().ToCartesian(x, y, z);
 
+    /// <summary>Fractional coordinates of a Cartesian point in angstrom, without reducing it into the cell.</summary>
+    public (double X, double Y, double Z) ToFractional(double x, double y, double z) => Basis().ToFractional(x, y, z);
+
     /// <summary>The a edge as a Cartesian vector.</summary>
     public Vector3 AVector => ToCartesian(1, 0, 0);
 
@@ -203,6 +206,15 @@ internal readonly struct CellBasis
             return Vector3.Zero;
         ToCartesian(x, y, z, out double cx, out double cy, out double cz);
         return new Vector3((float)cx, (float)cy, (float)cz);
+    }
+
+    public (double X, double Y, double Z) ToFractional(double x, double y, double z)
+    {
+        if (!Valid)
+            return (0, 0, 0);
+        double w = z / m22;
+        double v = (y - m12 * w) / m11;
+        return ((x - m01 * v - m02 * w) / m00, v, w);
     }
 
     /// <summary>Distance, in angstrom, between two fractional positions.</summary>

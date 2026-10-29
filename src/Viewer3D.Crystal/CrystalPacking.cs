@@ -76,7 +76,7 @@ public static class CrystalPacking
 
     /// <summary>The scale at which the closest bonded pair touches; without bonds, the closest pair of all.</summary>
     internal static double TouchingScale(CrystalStructure structure, CellBasis basis, CrystalSceneBuilder.Reduced[] reduced,
-        double[] radius)
+        double[] radius, bool periodic = true)
     {
         double Distance(int first, int second, LatticeShift shift)
         {
@@ -94,6 +94,8 @@ public static class CrystalPacking
             if (atoms[bond.First].IsVoid || atoms[bond.Second].IsVoid)
                 continue;
             LatticeShift shift = reduced[bond.Second].Floor + bond.Shift - reduced[bond.First].Floor;
+            if (!periodic && shift != LatticeShift.Zero)
+                continue;
             double d = Distance(bond.First, bond.Second, shift);
             if (d > 0)
                 best = Math.Min(best, d / (radius[bond.First] + radius[bond.Second]));
@@ -112,6 +114,8 @@ public static class CrystalPacking
                     for (int b = -1; b <= 1; b++)
                         for (int c = -1; c <= 1; c++)
                         {
+                            if (!periodic && (a != 0 || b != 0 || c != 0))
+                                continue;
                             if (i == j && a == 0 && b == 0 && c == 0)
                                 continue;
                             double d = Distance(i, j, new LatticeShift(a, b, c));
