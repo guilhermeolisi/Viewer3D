@@ -2,7 +2,7 @@ namespace Viewer3D.Crystal;
 
 /// <summary>
 /// Extends bonds given for some atoms of a site to every atom of that site. A program that finds bonds only around one
-/// representative atom per site (as the Sindarin engine does) gives the full picture this way: atoms of one site are
+/// representative atom per site (as some crystallography programs do) gives the full picture this way: atoms of one site are
 /// equivalent by symmetry, so each has neighbors at the same distances.
 /// </summary>
 public static class CrystalBondExpansion
