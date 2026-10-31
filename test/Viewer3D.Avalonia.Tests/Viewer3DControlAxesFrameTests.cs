@@ -81,6 +81,40 @@ public class Viewer3DControlAxesFrameTests
         Assert.Equal(numbers.Length, withInk);
     }
 
+    [AvaloniaTheory]
+    [InlineData(ProjectionKind.Orthographic)]
+    [InlineData(ProjectionKind.Perspective)]
+    public void Title_IsDrawnAtTheTopCenter_AndNowhereElse(ProjectionKind projection)
+    {
+        Viewer3DControl control = Control(projection);
+        control.AxesFrame = Frame;
+        using SKBitmap untitled = TestWindows.Decode(control.RenderToPng(200, 200));
+
+        control.AxesFrame = Frame with { Title = "Crystallite radius (nm)" };
+        using SKBitmap titled = TestWindows.Decode(control.RenderToPng(200, 200));
+
+        // The title is drawn centred, on the baseline 8 + FrameTitleSize = 21 px: its ink fills the top band around the
+        // centre, and the rest of the image is the same pixel for pixel.
+        int top = 0, centre = 0, below = 0;
+        for (int x = 0; x < 200; x++)
+            for (int y = 0; y < 200; y++)
+            {
+                if (untitled.GetPixel(x, y) == titled.GetPixel(x, y))
+                    continue;
+                if (y < 30)
+                {
+                    top++;
+                    if (x is > 60 and < 140)
+                        centre++;
+                }
+                else
+                    below++;
+            }
+        Assert.True(top > 50, $"the title changed {top} pixels of the top band");
+        Assert.True(centre > top / 2, "the ink of the title is centred");
+        Assert.Equal(0, below);
+    }
+
     [AvaloniaFact]
     public void AxesFrame_DoesNotChangeTheProjection()
     {
