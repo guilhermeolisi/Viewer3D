@@ -120,6 +120,10 @@
 - `Viewer3D.Avalonia`: `Viewer3DControl.CanDragItem` marks items that the left button drags instead of rotating the
   view; `ItemDragStarted`, `ItemDragged` and `ItemDragCompleted` carry the ray under the pointer, and a lost capture
   ends the drag as canceled. A press that does not move past `ClickTolerance` is still a click.
+- `Viewer3D`: `PlaneFamilyShapes` draws a family of parallel planes cut by a box of cells (`CellBox`), one translucent,
+  non-pickable polygon per plane with one plane highlighted, and the traces of a plane on the walls of a block of
+  cells (`GridSection`). `SceneSlice.Apply` keeps the items of a scene within a slab around a plane and hides or fades
+  the others (`SliceMode`).
 
 ## 0.1.0 - 10/17/2026
 

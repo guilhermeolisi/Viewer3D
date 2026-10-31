@@ -234,6 +234,31 @@ formats the value. `LineItem.Dash` dashes any line.
 
 ![The distance from the center to a corner and the tetrahedral angle](docs/images/measure.png)
 
+## Plane families and slices
+
+`PlaneFamilyShapes.Build` draws the planes n·(p - origin) = k·d of a family, k from first to last, cut by a box
+(`CellBox`: a corner and three edges, a cell or a block of cells). Each plane is a translucent polygon drawn from both
+sides with its outline, not `Pickable`, so a click still picks the atom behind it; one plane can be highlighted in its
+own color. `PlaneFamilyShapes.GridSection` gives the traces of one plane on the walls of a block of cells, the net of
+the plane. `SceneSlice.Apply` keeps the items within a slab around a plane and hides or fades the rest, to show the
+atoms on one plane. For lattice planes (hkl), the normal is g = h·a* + k·b* + l·c*, with the reciprocal vectors
+a* = (b × c)/V and so on, and d is 1/|g| (`CrystalCell.AStar`, `BStar` and `CStar` are only the unit directions).
+
+```csharp
+CrystalCell cell = structure.Cell;
+Vector3 a = cell.AVector, b = cell.BVector, c = cell.CVector;
+float volume = Vector3.Dot(a, Vector3.Cross(b, c));
+Vector3 g = (Vector3.Cross(b, c) + Vector3.Cross(c, a) + Vector3.Cross(a, b)) / volume;   // (111)
+var block = new CellBox(Vector3.Zero, 2 * cell.AVector, 2 * cell.BVector, 2 * cell.CVector);
+var planes = PlaneFamilyShapes.Build(Vector3.Normalize(g), 1 / g.Length(), 0, 6, block,
+    new Rgba(40, 110, 230, 70), highlighted: 3, highlightColor: new Rgba(245, 140, 20, 130));
+Scene onePlane = SceneSlice.Apply(scene, Vector3.Normalize(g) * (3 / g.Length()), Vector3.Normalize(g),
+    0.1f / g.Length(), SliceMode.Fade);
+```
+
+![The (111) planes of fluorite in a 2x2x2 block](docs/images/plane-family.png)
+![The atoms of one (111) plane, seen along its normal](docs/images/plane-slice.png)
+
 ## Camera animation
 
 `AnimateCamera(state, duration)` moves the camera to a `CameraState` (orientation, target, view radius) from where it

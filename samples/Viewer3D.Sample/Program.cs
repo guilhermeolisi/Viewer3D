@@ -100,6 +100,8 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(dir, "crystal-sphere.png"), Scenes.SphereCrystal().RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "mesh-obj.png"), Scenes.Viewer(ObjText.BandedSphere(), null).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "measure.png"), Scenes.Viewer(Scenes.Measured(), null).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "plane-family.png"), Scenes.PlaneFamily(slice: false).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "plane-slice.png"), Scenes.PlaneFamily(slice: true).RenderToPng(640, 480));
             // Four frames of a turntable, an eighth of a turn apart.
             Viewer3DControl turning = Scenes.Crystal(CrystalStyle.BallAndStick);
             var turntable = new CameraTurntable(turning.Camera!.State, Vector3.UnitY, TimeSpan.FromSeconds(8));
@@ -286,6 +288,55 @@ internal static class Scenes
         viewer.Camera!.LookAlong(-structure.Cell.AVector, structure.Cell.CVector);
         viewer.Camera.Orbit(-35, -25);
         viewer.Camera.Frame(scene.Scene);
+        return viewer;
+    }
+
+    /// <summary>
+    /// The (111) planes of the fluorite of <see cref="Crystal"/> in a 2x2x2 block, d = a/sqrt(3), with the middle plane
+    /// in orange. With <paramref name="slice"/>, the atoms off that plane fade and the camera looks along its normal,
+    /// over the traces of the plane on the cell walls.
+    /// </summary>
+    public static Viewer3DControl PlaneFamily(bool slice)
+    {
+        CrystalStructure structure = Fluorite();
+        CrystalScene scene = new CrystalSceneBuilder().Build(structure, new CrystalSceneOptions
+        {
+            Style = CrystalStyle.BallAndStick,
+            IncludeLabels = false,
+            RepeatA = 2,
+            RepeatB = 2,
+            RepeatC = 2,
+        });
+        CrystalCell cell = structure.Cell;
+        // The reciprocal vectors a* = (b x c)/V and so on (CrystalCell.AStar is only the unit direction), g = a* + b* + c*.
+        Vector3 a = cell.AVector, b = cell.BVector, c = cell.CVector;
+        float volume = Vector3.Dot(a, Vector3.Cross(b, c));
+        Vector3 g = (Vector3.Cross(b, c) + Vector3.Cross(c, a) + Vector3.Cross(a, b)) / volume;
+        Vector3 n = Vector3.Normalize(g);
+        float d = 1 / g.Length();
+        var block = new CellBox(Vector3.Zero, 2 * cell.AVector, 2 * cell.BVector, 2 * cell.CVector);
+        // h·x runs from 0 to 6 over the corners of the block: planes 0 to 6, the middle one is 3.
+        IReadOnlyList<MeshItem> planes = PlaneFamilyShapes.Build(n, d, 0, 6, block, new Rgba(40, 110, 230, 70), 3,
+            new Rgba(245, 140, 20, 130), idBase: 10_000);
+        Scene shown;
+        if (slice)
+        {
+            Scene atoms = SceneSlice.Apply(scene.Scene, n * (3 * d), n, 0.1f * d, SliceMode.Fade, fadedAlpha: 40);
+            var cellOnly = new CellBox(Vector3.Zero, cell.AVector, cell.BVector, cell.CVector);
+            shown = new Scene([.. atoms.Items, planes.Single(p => p.Id == 10_003),
+                .. PlaneFamilyShapes.GridSection(n, 3 * d, cellOnly, 2, 2, 2, new Rgba(90, 90, 90), 1.5f)]);
+        }
+        else
+            shown = new Scene([.. scene.Scene.Items, .. planes]);
+        var viewer = new Viewer3DControl { Scene = shown, AxisDirections = scene.Axes };
+        if (slice)
+            viewer.Camera!.LookAlong(-n, cell.CVector);
+        else
+        {
+            viewer.Camera!.LookAlong(-structure.Cell.AVector, structure.Cell.CVector);
+            viewer.Camera.Orbit(-35, -25);
+        }
+        viewer.Camera.Frame(shown);
         return viewer;
     }
 
