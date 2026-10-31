@@ -92,6 +92,7 @@ internal static class Program
             builder.SetupWithoutStarting();
             Directory.CreateDirectory(dir);
             File.WriteAllBytes(Path.Combine(dir, "surface.png"), Scenes.Viewer(Scenes.Surface(90), Scenes.Surface(30)).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "axes-frame.png"), Scenes.Framed().RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "atoms.png"), Scenes.Viewer(Scenes.Atoms(), null).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "crystal-ball-and-stick.png"), Scenes.Crystal(CrystalStyle.BallAndStick).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "crystal-space-filling.png"), Scenes.Crystal(CrystalStyle.SpaceFilling).RenderToPng(640, 480));
@@ -154,6 +155,7 @@ internal sealed class SampleApp : Application
                             ItemsSource = new[]
                             {
                                 new TabItem { Header = "Spherical surface", Content = Scenes.Viewer(Scenes.Surface(90), Scenes.Surface(30)) },
+                                new TabItem { Header = "Axes frame", Content = Scenes.Framed() },
                                 new TabItem { Header = "Height field", Content = Scenes.Viewer(Scenes.HeightField(), null) },
                                 new TabItem { Header = "Balls and sticks", Content = Scenes.Viewer(Scenes.Atoms(), null) },
                                 new TabItem { Header = "Crystal", Content = Scenes.Crystal(CrystalStyle.BallAndStick) },
@@ -188,6 +190,16 @@ internal static class Scenes
         };
         viewer.Camera!.Orbit(-40, -60);
         viewer.Camera.Frame(scene);
+        return viewer;
+    }
+
+    /// <summary>The spherical surface inside an axes frame with ticks, numbers and a grid on the back faces.</summary>
+    public static Viewer3DControl Framed()
+    {
+        Viewer3DControl viewer = Viewer(Surface(90), Surface(30));
+        viewer.AxisDirections = null;
+        viewer.AxesFrame = new AxesFrameOptions(["x", "y", "z"], Title: "r(θ, φ)");
+        viewer.Camera!.Frame(Vector3.Zero, AxesFrame.FrameRadius(AxesFrame.AutoLimits(viewer.Scene!)));
         return viewer;
     }
 

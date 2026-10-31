@@ -86,6 +86,22 @@ viewer.ItemDragged += (_, e) =>
 A `SphereItem` with `Sectors` is painted as wedges from twelve o'clock, clockwise, each in its own color; what the
 fractions leave of the turn stays empty, with the outline of the disc.
 
+## Axes frame
+
+Set `AxesFrame` to draw a box around the scene with ticks, numbers and axis titles, as in a 3D plot. The limits are
+symmetric about the origin and come from the scene (`AxesFrame.AutoLimits`, with steps of 1, 2 or 5 times a power of
+ten) unless `AxesFrameOptions.Limits` gives them. The edges and the grid sit on the faces away from the eye and are
+painted behind the scene; the ticks and numbers go on the lowest edge of the outline for each axis, and an axis seen
+end on gets none. The frame follows the camera in both projections, and PNG exports and frame renderers keep it.
+`AxesFrame.FrameRadius` gives a view radius that holds the box, its numbers and its titles.
+
+```csharp
+viewer.AxesFrame = new AxesFrameOptions(["x (nm)", "y (nm)", "z (nm)"]);
+viewer.Camera.Frame(Vector3.Zero, AxesFrame.FrameRadius(AxesFrame.AutoLimits(viewer.Scene)));
+```
+
+![A spherical surface inside an axes frame](docs/images/axes-frame.png)
+
 ## Crystal layer
 
 `Viewer3D.Crystal` builds the scene of a crystal structure. The layer is optional: `Viewer3D.Avalonia` does not
