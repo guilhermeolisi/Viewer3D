@@ -69,6 +69,13 @@ public sealed class FramePreparer
     /// <summary>Whether labels are added to the list.</summary>
     public bool IncludeLabels { get; set; } = true;
 
+    /// <summary>
+    /// The axes frame to add to the list (<see cref="DrawList.AxesFrame"/>), projected by the same camera as the scene,
+    /// in either projection; null for none. Without <see cref="AxesFrameOptions.Limits"/>, the limits come from
+    /// <see cref="AxesFrame.AutoLimits"/> of the scene being prepared.
+    /// </summary>
+    public AxesFrameOptions? AxesFrameOptions { get; set; }
+
     /// <summary>Prepares a new draw list.</summary>
     public DrawList Prepare(Scene scene, Camera camera, float width, float height)
     {
@@ -121,6 +128,15 @@ public sealed class FramePreparer
             }
         }
         Array.Sort(list.OrderDepth, list.Order, 0, list.CommandCount);
+        if (AxesFrameOptions is { } frame
+            && (frame.Limits ?? AxesFrame.AutoLimits(scene, frame.MaxTicks)) is { Max: var max, Min: var min, Step: > 0 } limits
+            && max > min && (max - min) / limits.Step <= 200)
+        {
+            // Limits that make no box (a caller's empty range) or ask for hundreds of ticks leave the frame out instead of
+            // failing or stalling the paint.
+            AxesFrameLayout layout = AxesFrame.Layout(frame, limits, AxesFrameView.FromCamera(camera));
+            list.AxesFrame = PreparedAxesFrame.Project(layout, p);
+        }
     }
 
     /// <summary>

@@ -203,6 +203,21 @@ public static class AxesFrame
     /// </summary>
     public static AxesFrameLimits AutoLimits(Scene scene, int maxTicks = 5) => NiceLimits(MaxAbsCoordinate(scene), maxTicks);
 
+    /// <summary>
+    /// Radius of a sphere around the origin that holds the box of <paramref name="limits"/> with its numbers and axis
+    /// names, to frame the camera on the whole frame (<see cref="Camera.Frame(Vector3, float)"/>).
+    /// </summary>
+    public static float FrameRadius(in AxesFrameLimits limits)
+    {
+        double half = Math.Max(Math.Abs(limits.Min), Math.Abs(limits.Max)), side = limits.Max - limits.Min;
+        // A number sits beyond an edge (two coordinates at ±half) along the diagonal of the other two axes, and at most
+        // at ±half on the axis itself; an axis name sits at the middle of the edge, further out.
+        double number = half + NumberOffset * side / Math.Sqrt(2);
+        double title = half + TitleOffset * side / Math.Sqrt(2);
+        double r = Math.Max(Math.Sqrt(2 * number * number + half * half), Math.Sqrt(2) * title);
+        return (float)Math.Max(r, half * Math.Sqrt(3));
+    }
+
     /// <summary>Text of a tick, in the invariant culture, with the decimals the step needs and no "-0".</summary>
     public static string FormatTick(double value, double step)
     {
@@ -353,5 +368,65 @@ public static class AxesFrame
             ? fraction < 1.5 ? 1 : fraction < 3 ? 2 : fraction < 7 ? 5 : 10
             : fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
         return nice * Math.Pow(10, exponent);
+    }
+}
+
+/// <summary>A segment of the frame on the screen, in device-independent pixels.</summary>
+/// <param name="Start">First end.</param>
+/// <param name="End">Second end.</param>
+/// <param name="Kind">What the segment is.</param>
+/// <param name="Axis">Axis it belongs to (0 x, 1 y, 2 z).</param>
+public readonly record struct AxesFrameLine(Vector2 Start, Vector2 End, AxesFrameSegmentKind Kind, int Axis);
+
+/// <summary>A text of the frame on the screen, centered on <paramref name="Center"/>.</summary>
+/// <param name="Center">Point the text is centered on, in device-independent pixels.</param>
+/// <param name="Text">The text.</param>
+/// <param name="Axis">Axis it belongs to (0 x, 1 y, 2 z).</param>
+/// <param name="IsTitle">True for the axis name, false for a tick value.</param>
+public readonly record struct AxesFrameText(Vector2 Center, string Text, int Axis, bool IsTitle);
+
+/// <summary>
+/// An <see cref="AxesFrameLayout"/> projected by the camera of a <see cref="DrawList"/>: <see cref="Back"/> is painted
+/// before the scene, <see cref="Front"/> and <see cref="Texts"/> after it, and <see cref="Title"/> at the top of the
+/// viewport. A piece whose end falls behind the perspective eye is left out.
+/// </summary>
+/// <param name="Layout">The frame in world coordinates.</param>
+/// <param name="Back">Edges and grid of the back planes.</param>
+/// <param name="Front">Tick marks.</param>
+/// <param name="Texts">Tick values and axis names.</param>
+/// <param name="Title">Text for the top of the viewport, or null.</param>
+public sealed record PreparedAxesFrame(
+    AxesFrameLayout Layout,
+    IReadOnlyList<AxesFrameLine> Back,
+    IReadOnlyList<AxesFrameLine> Front,
+    IReadOnlyList<AxesFrameText> Texts,
+    string? Title)
+{
+    /// <summary>Projects <paramref name="layout"/> with <paramref name="projector"/>.</summary>
+    public static PreparedAxesFrame Project(AxesFrameLayout layout, in Projector projector)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        var back = new List<AxesFrameLine>(layout.Back.Count);
+        var front = new List<AxesFrameLine>(layout.Front.Count);
+        var texts = new List<AxesFrameText>(layout.Labels.Count);
+        foreach (AxesFrameSegment s in layout.Back)
+            if (TryLine(projector, s, out AxesFrameLine line))
+                back.Add(line);
+        foreach (AxesFrameSegment s in layout.Front)
+            if (TryLine(projector, s, out AxesFrameLine line))
+                front.Add(line);
+        foreach (AxesFrameLabel l in layout.Labels)
+            if (projector.Project(l.Position, out float x, out float y, out _))
+                texts.Add(new AxesFrameText(new Vector2(x, y), l.Text, l.Axis, l.IsTitle));
+        return new PreparedAxesFrame(layout, back, front, texts, layout.Title);
+    }
+
+    static bool TryLine(in Projector projector, in AxesFrameSegment s, out AxesFrameLine line)
+    {
+        line = default;
+        if (!projector.Project(s.Start, out float x1, out float y1, out _) || !projector.Project(s.End, out float x2, out float y2, out _))
+            return false;
+        line = new AxesFrameLine(new Vector2(x1, y1), new Vector2(x2, y2), s.Kind, s.Axis);
+        return true;
     }
 }

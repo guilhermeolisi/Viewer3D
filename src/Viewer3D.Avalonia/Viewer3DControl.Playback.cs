@@ -89,7 +89,7 @@ public partial class Viewer3DControl
     {
         CheckImageSize(width, height, scale);
         Camera camera = Camera?.Clone() ?? new Camera();
-        return new SceneFrameRenderer(Sequence, Scene ?? Scene.Empty, camera, CreateOptions(camera), ShowLabels, width,
+        return new SceneFrameRenderer(Sequence, Scene ?? Scene.Empty, camera, CreateOptions(camera), ShowLabels, AxesFrame, width,
             height, scale);
     }
 

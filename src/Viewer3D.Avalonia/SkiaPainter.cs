@@ -41,6 +41,8 @@ internal static class SkiaPainter
         using var stroke = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke };
         using var vertexPaint = new SKPaint { Color = SKColors.White };
         Scene? scene = list.Scene;
+        if (list.AxesFrame is { } frame)
+            PaintFrameBack(canvas, frame, options.Label, stroke);
 
         ReadOnlySpan<uint> commands = list.Commands;
         int c = 0;
@@ -80,6 +82,8 @@ internal static class SkiaPainter
             c++;
         }
 
+        if (list.AxesFrame is { } over)
+            PaintFrameFront(canvas, over, w, options.Label, fill, stroke);
         if (options.ShowLabels && list.LabelCount > 0)
             PaintLabels(canvas, list, options.Label, fill);
         if (options.ShowAxisIndicator && options.Axes is { Count: > 0 })
@@ -334,6 +338,48 @@ internal static class SkiaPainter
             fill.Color = list.LabelColorAt(i) is uint argb ? new SKColor(argb) : defaultColor;
             canvas.DrawText(texts[i], x, y + size, SKTextAlign.Left, font, fill);
         }
+    }
+
+    /// <summary>Font size of the tick values of the axes frame.</summary>
+    internal const float FrameNumberSize = 11f;
+
+    /// <summary>Font size of the axis names and of the title of the axes frame.</summary>
+    internal const float FrameTitleSize = 13f;
+
+    // The back planes in the label color, faint, under the scene: edges, then a fainter grid.
+    static void PaintFrameBack(SKCanvas canvas, PreparedAxesFrame frame, SKColor label, SKPaint stroke)
+    {
+        stroke.StrokeCap = SKStrokeCap.Butt;
+        stroke.PathEffect = null;
+        foreach (AxesFrameLine line in frame.Back)
+        {
+            bool grid = line.Kind == AxesFrameSegmentKind.Grid;
+            stroke.Color = label.WithAlpha(grid ? (byte)40 : (byte)110);
+            stroke.StrokeWidth = grid ? 0.75f : 1f;
+            canvas.DrawLine(line.Start.X, line.Start.Y, line.End.X, line.End.Y, stroke);
+        }
+    }
+
+    // Ticks, numbers and axis names over the scene, and the title centered at the top.
+    static void PaintFrameFront(SKCanvas canvas, PreparedAxesFrame frame, float width, SKColor label, SKPaint fill,
+        SKPaint stroke)
+    {
+        stroke.Color = label;
+        stroke.StrokeWidth = 1f;
+        stroke.StrokeCap = SKStrokeCap.Butt;
+        foreach (AxesFrameLine line in frame.Front)
+            canvas.DrawLine(line.Start.X, line.Start.Y, line.End.X, line.End.Y, stroke);
+        using var numbers = new SKFont(SKTypeface.Default, FrameNumberSize);
+        using var titles = new SKFont(SKTypeface.Default, FrameTitleSize) { Embolden = true };
+        fill.Color = label;
+        foreach (AxesFrameText text in frame.Texts)
+        {
+            SKFont font = text.IsTitle ? titles : numbers;
+            // Centered on the point: the baseline goes a little below the middle of the capitals.
+            canvas.DrawText(text.Text, text.Center.X, text.Center.Y + 0.36f * font.Size, SKTextAlign.Center, font, fill);
+        }
+        if (!string.IsNullOrEmpty(frame.Title))
+            canvas.DrawText(frame.Title, width / 2, 8f + FrameTitleSize, SKTextAlign.Center, titles, fill);
     }
 
     static void PaintAxes(SKCanvas canvas, float height, PaintOptions options, SKPaint fill, SKPaint stroke)

@@ -122,6 +122,10 @@ public partial class Viewer3DControl : Control
     public static readonly StyledProperty<bool> ShowLabelsProperty =
         AvaloniaProperty.Register<Viewer3DControl, bool>(nameof(ShowLabels), true);
 
+    /// <summary>Defines <see cref="AxesFrame"/>.</summary>
+    public static readonly StyledProperty<AxesFrameOptions?> AxesFrameProperty =
+        AvaloniaProperty.Register<Viewer3DControl, AxesFrameOptions?>(nameof(AxesFrame));
+
     /// <summary>Defines <see cref="Projection"/>.</summary>
     public static readonly StyledProperty<ProjectionKind> ProjectionProperty =
         AvaloniaProperty.Register<Viewer3DControl, ProjectionKind>(nameof(Projection));
@@ -150,7 +154,8 @@ public partial class Viewer3DControl : Control
     {
         AffectsRender<Viewer3DControl>(SceneProperty, LowDetailSceneProperty, SelectedItemIdProperty,
             SelectedItemIdsProperty, SceneBackgroundProperty, OutlineWidthProperty,
-            AxisDirectionsProperty, ShowAxisIndicatorProperty, ShowLabelsProperty, SequenceProperty, FrameIndexProperty);
+            AxisDirectionsProperty, ShowAxisIndicatorProperty, ShowLabelsProperty, AxesFrameProperty, SequenceProperty,
+            FrameIndexProperty);
         FocusableProperty.OverrideDefaultValue<Viewer3DControl>(true);
         ClipToBoundsProperty.OverrideDefaultValue<Viewer3DControl>(true);
     }
@@ -253,6 +258,16 @@ public partial class Viewer3DControl : Control
         set => SetValue(ShowLabelsProperty, value);
     }
 
+    /// <summary>
+    /// The axes frame drawn around the scene (back planes, ticks, numbers and axis names), in either projection; null,
+    /// the default, for none. Also in <see cref="RenderToPng"/> and <see cref="CreateFrameRenderer"/>.
+    /// </summary>
+    public AxesFrameOptions? AxesFrame
+    {
+        get => GetValue(AxesFrameProperty);
+        set => SetValue(AxesFrameProperty, value);
+    }
+
     /// <summary>Projection kind, applied to the camera.</summary>
     public ProjectionKind Projection
     {
@@ -328,7 +343,7 @@ public partial class Viewer3DControl : Control
     {
         CheckImageSize(width, height, scale);
         Camera camera = Camera?.Clone() ?? new Camera();
-        return Paint(CurrentFullScene(), camera, CreateOptions(camera), ShowLabels, width, height, scale);
+        return Paint(CurrentFullScene(), camera, CreateOptions(camera), ShowLabels, AxesFrame, width, height, scale);
     }
 
     static void CheckImageSize(int width, int height, double scale)
@@ -338,14 +353,15 @@ public partial class Viewer3DControl : Control
     }
 
     // Paints a scene into a PNG; touches nothing of the control, so it runs on any thread.
-    internal static byte[] Paint(Scene scene, Camera camera, PaintOptions options, bool labels, int width, int height,
-        double scale)
+    internal static byte[] Paint(Scene scene, Camera camera, PaintOptions options, bool labels, AxesFrameOptions? frame,
+        int width, int height, double scale)
     {
         var info = new SKImageInfo((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale), SKColorType.Rgba8888, SKAlphaType.Premul);
         using SKSurface surface = SKSurface.Create(info);
         SKCanvas canvas = surface.Canvas;
         canvas.Scale((float)scale);
-        DrawList list = new FramePreparer { IncludeLabels = labels }.Prepare(scene, camera, width, height);
+        var preparer = new FramePreparer { IncludeLabels = labels, AxesFrameOptions = frame };
+        DrawList list = preparer.Prepare(scene, camera, width, height);
         SkiaPainter.Paint(canvas, list, options);
         canvas.Flush();
         using SKImage image = surface.Snapshot();
@@ -429,6 +445,7 @@ public partial class Viewer3DControl : Control
         lock (list)
         {
             preparer.IncludeLabels = ShowLabels;
+            preparer.AxesFrameOptions = AxesFrame;
             preparer.Prepare(scene, camera, (float)size.Width, (float)size.Height, list);
         }
         current = list;

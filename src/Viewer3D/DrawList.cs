@@ -70,6 +70,12 @@ public sealed class DrawList
     /// <summary>The scene this list was prepared from.</summary>
     public Scene? Scene { get; internal set; }
 
+    /// <summary>
+    /// The axes frame, projected, when the preparer was given <see cref="FramePreparer.AxesFrameOptions"/>; null
+    /// otherwise. Its back is painted before <see cref="Commands"/>, the rest after them.
+    /// </summary>
+    public PreparedAxesFrame? AxesFrame { get; internal set; }
+
     /// <summary>Number of triangles.</summary>
     public int TriangleCount { get; internal set; }
 
@@ -167,6 +173,7 @@ public sealed class DrawList
     internal void Reset(Scene scene, float width, float height)
     {
         Scene = scene;
+        AxesFrame = null;
         Width = width;
         Height = height;
         TriangleCount = CircleCount = SegmentCount = EllipseCount = LabelCount = CommandCount = 0;
