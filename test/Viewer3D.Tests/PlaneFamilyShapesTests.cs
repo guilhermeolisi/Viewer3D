@@ -129,5 +129,15 @@ public class PlaneFamilyShapesTests
             fan += Vector3.Dot(Vector3.Cross(p1 - p0, p2 - p0), n) / 2;
         }
         Assert.Equal(Area(polygon), MathF.Abs(fan), 1e-5f);
+        // The same area holds for any order (the fan of a vertex list is its shoelace), so the order itself: walking the
+        // vertices, every corner turns the same way around the normal, which only the order around the polygon does.
+        Assert.Equal(5, polygon.Length);
+        int turns = 0;
+        for (int k = 0; k < polygon.Length; k++)
+        {
+            Vector3 a = polygon[k], b = polygon[(k + 1) % polygon.Length], c = polygon[(k + 2) % polygon.Length];
+            turns += MathF.Sign(Vector3.Dot(Vector3.Cross(b - a, c - b), n));
+        }
+        Assert.Equal(polygon.Length, Math.Abs(turns));
     }
 }
