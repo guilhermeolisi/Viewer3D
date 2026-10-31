@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `Viewer3D`: `MeasureShapes.Dihedral` shows a dihedral angle p-a-b-q: the axis a-b dashed, two dashed arms from its
+  middle toward p and q seen along the axis, the arc between them and a label.
 - `Viewer3D.Crystal`, a new optional package: a crystal structure (cell, atoms, bonds) turned into a scene in ball and
   stick or space filling, with a block of 1 to 3 cells along each axis, the atoms on the far faces, the bonded
   neighbors outside the block as faded spheres, the cell edges, labels, a legend, and the element colors and radii
