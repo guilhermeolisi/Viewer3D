@@ -20,6 +20,26 @@ public static class MeasureShapes
     ];
 
     /// <summary>
+    /// A dimension line as in a technical drawing: a solid line from <paramref name="start"/> to <paramref name="end"/>,
+    /// a tick of <paramref name="tickLength"/> across each end along <paramref name="tickDirection"/> (its part
+    /// perpendicular to the line; an arbitrary perpendicular when it has none), and <paramref name="label"/> at the
+    /// middle. Every item carries <paramref name="id"/>.
+    /// </summary>
+    public static SceneItem[] Dimension(Vector3 start, Vector3 end, Vector3 tickDirection, float tickLength, Rgba color,
+        string label, float width = 1.5f, int id = 0)
+    {
+        Vector3 along = Direction(end - start, Vector3.UnitX);
+        Vector3 tick = AcrossAxis(tickDirection, along, Perpendicular(along)) * (tickLength / 2);
+        return
+        [
+            new LineItem { Id = id, Start = start, End = end, Color = color, Width = width, Pickable = false },
+            new LineItem { Id = id, Start = start - tick, End = start + tick, Color = color, Width = width, Pickable = false },
+            new LineItem { Id = id, Start = end - tick, End = end + tick, Color = color, Width = width, Pickable = false },
+            new LabelItem { Id = id, Position = (start + end) / 2, Text = label, Color = color, Pickable = false },
+        ];
+    }
+
+    /// <summary>
     /// The angle at <paramref name="vertex"/> between the directions to <paramref name="a"/> and <paramref name="c"/>:
     /// two dashed arms from the vertex, an arc of <paramref name="radius"/> around it from one arm to the other in
     /// <paramref name="segments"/> pieces, and <paramref name="label"/> just outside the middle of the arc. The arc is

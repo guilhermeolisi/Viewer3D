@@ -103,6 +103,7 @@ internal static class Program
             File.WriteAllBytes(Path.Combine(dir, "measure.png"), Scenes.Viewer(Scenes.Measured(), null).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "plane-family.png"), Scenes.PlaneFamily(slice: false).RenderToPng(640, 480));
             File.WriteAllBytes(Path.Combine(dir, "plane-slice.png"), Scenes.PlaneFamily(slice: true).RenderToPng(640, 480));
+            File.WriteAllBytes(Path.Combine(dir, "point-cloud.png"), Scenes.Viewer(Scenes.PointCloud(), null).RenderToPng(640, 480));
             // Four frames of a turntable, an eighth of a turn apart.
             Viewer3DControl turning = Scenes.Crystal(CrystalStyle.BallAndStick);
             var turntable = new CameraTurntable(turning.Camera!.State, Vector3.UnitY, TimeSpan.FromSeconds(8));
@@ -162,6 +163,7 @@ internal sealed class SampleApp : Application
                                 new TabItem { Header = "Space filling", Content = Scenes.Crystal(CrystalStyle.SpaceFilling) },
                                 new TabItem { Header = "OBJ mesh", Content = Scenes.Viewer(ObjText.BandedSphere(), null) },
                                 new TabItem { Header = "Measurement", Content = Scenes.Viewer(Scenes.Measured(), null) },
+                                new TabItem { Header = "Point cloud", Content = Scenes.Viewer(Scenes.PointCloud(), null) },
                             },
                         },
                     },
@@ -285,6 +287,36 @@ internal static class Scenes
             .. MeasureShapes.Distance(Vector3.Zero, corner, red, distance.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)),
             .. MeasureShapes.Angle(corner, Vector3.Zero, other, 0.7f, red,
                 angle.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "°"),
+        ]);
+    }
+
+    /// <summary>
+    /// The points of a cubic lattice of spacing 1 within a radius of 2.6, each sized and colored by a value that falls
+    /// off from the origin as exp(-r²/3) (the origin left out), a wire sphere of radius 2 through the origin centered
+    /// at (-2, 0, 0) with its great circle normal to x, and a dimension line marking one spacing.
+    /// </summary>
+    public static Scene PointCloud()
+    {
+        var positions = new List<Vector3>();
+        var values = new List<double>();
+        for (int i = -3; i <= 3; i++)
+            for (int j = -3; j <= 3; j++)
+                for (int k = -3; k <= 3; k++)
+                {
+                    var p = new Vector3(i, j, k);
+                    if ((i, j, k) == (0, 0, 0) || p.Length() > 2.6f)
+                        continue;
+                    positions.Add(p);
+                    values.Add(Math.Exp(-p.LengthSquared() / 3));
+                }
+        var map = new FuncColorMap(v => Palette[Math.Clamp((int)(v * Palette.Length), 0, Palette.Length - 1)]);
+        var gray = new Rgba(120, 120, 120);
+        var orange = new Rgba(230, 120, 20);
+        return new Scene([
+            .. PointCloudShapes.Build(positions, values, v => 0.06f + 0.18f * (float)v, map),
+            .. LineShapes.WireSphere(new Vector3(-2, 0, 0), 2, gray, meridians: 6, parallels: 5),
+            .. LineShapes.Circle(new Vector3(-2, 0, 0), Vector3.UnitX, 2, orange, width: 2.5f),
+            .. MeasureShapes.Dimension(new Vector3(1, -2, 0), new Vector3(2, -2, 0), Vector3.UnitY, 0.25f, orange, "1.0000"),
         ]);
     }
 

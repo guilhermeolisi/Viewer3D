@@ -246,9 +246,29 @@ The triangle ceiling comes from the frame time: the measurements under Performan
 `MeasureShapes.Distance` gives a dashed line between two points with a label at its middle, and `MeasureShapes.Angle`
 the two dashed arms of an angle with an arc and its label. Add them to the scene, after the items they measure; their
 items are not `Pickable`, so a click on the overlay still picks the atom or bond under it. The caller computes and
-formats the value. `LineItem.Dash` dashes any line.
+formats the value. `LineItem.Dash` dashes any line. `MeasureShapes.Dimension` is a dimension line as in a technical
+drawing: a solid line between two points, a tick across each end and the label at the middle, for a length that is not
+an atom-to-atom distance (the spacing of a family of planes, say).
 
 ![The distance from the center to a corner and the tetrahedral angle](docs/images/measure.png)
+
+## Point clouds, circles and wire spheres
+
+`PointCloudShapes.Build` turns a list of points and one value per point into spheres whose radius and color follow the
+value (`Func<double, float>` for the radius, an `IColorMap` for the color); points flagged as dashed are drawn as a
+dashed outline only. `LineShapes.Circle` gives a circle around a center in the plane normal to an axis, and
+`LineShapes.WireSphere` a sphere as meridians through z and parallels; both are guides, not `Pickable`, so a click on
+a point inside the sphere still picks the point.
+
+```csharp
+var cloud = PointCloudShapes.Build(positions, values, v => 0.06f + 0.18f * (float)v, colorMap);
+var sphere = LineShapes.WireSphere(new Vector3(-2, 0, 0), 2, new Rgba(120, 120, 120));
+var ring = LineShapes.Circle(new Vector3(-2, 0, 0), Vector3.UnitX, 2, new Rgba(230, 120, 20), width: 2.5f);
+var spacing = MeasureShapes.Dimension(new Vector3(1, -2, 0), new Vector3(2, -2, 0), Vector3.UnitY, 0.25f,
+    new Rgba(230, 120, 20), "1.0000");
+```
+
+![Lattice points sized by a value, a wire sphere through the origin and a dimension line](docs/images/point-cloud.png)
 
 ## Plane families and slices
 

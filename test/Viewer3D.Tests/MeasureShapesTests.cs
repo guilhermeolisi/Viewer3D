@@ -111,4 +111,40 @@ public class MeasureShapesTests
 
         Assert.All(distance.Concat(angle), i => Assert.False(i.Pickable));
     }
+
+    [Fact]
+    public void Dimension_IsASolidLineWithTicksAcrossBothEndsAndTheLabelAtTheMiddle()
+    {
+        Vector3 start = new(0, 0, 0), end = new(0, 0, 3);
+        // The tick direction leans along the line: only its part across it counts.
+        SceneItem[] items = MeasureShapes.Dimension(start, end, new Vector3(1, 0, 1), 0.4f, Color, "d = 3.0000 Å", id: 42);
+
+        LineItem[] lines = [.. items.OfType<LineItem>()];
+        Assert.Equal(3, lines.Length);
+        Assert.All(lines, l => Assert.Equal(0, l.Dash));
+        Assert.Equal(start, lines[0].Start);
+        Assert.Equal(end, lines[0].End);
+        foreach (LineItem tick in lines.Skip(1))
+        {
+            Assert.Equal(0.4f, Vector3.Distance(tick.Start, tick.End), 1e-5f);
+            Assert.Equal(0, Vector3.Dot(tick.End - tick.Start, end - start), 1e-5f);
+        }
+        Near(start, (lines[1].Start + lines[1].End) / 2);
+        Near(end, (lines[2].Start + lines[2].End) / 2);
+        LabelItem label = Assert.Single(items.OfType<LabelItem>());
+        Assert.Equal(new Vector3(0, 0, 1.5f), label.Position);
+        Assert.Equal("d = 3.0000 Å", label.Text);
+        Assert.All(items, i => Assert.False(i.Pickable));
+        Assert.All(items, i => Assert.Equal(42, i.Id));
+    }
+
+    [Fact]
+    public void Dimension_TickAlongTheLine_StillCrossesIt()
+    {
+        SceneItem[] items = MeasureShapes.Dimension(Vector3.Zero, Vector3.UnitX, Vector3.UnitX, 0.2f, Color, "1");
+
+        LineItem tick = items.OfType<LineItem>().ElementAt(1);
+        Assert.Equal(0.2f, Vector3.Distance(tick.Start, tick.End), 1e-5f);
+        Assert.Equal(0, Vector3.Dot(tick.End - tick.Start, Vector3.UnitX), 1e-5f);
+    }
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `Viewer3D`: `PointCloudShapes.Build` draws a cloud of points as spheres sized and colored by one value each, with an
+  optional dashed outline per point. `LineShapes.Circle` and `LineShapes.WireSphere` draw a circle and a wire sphere
+  as guides that a click goes through. `MeasureShapes.Dimension` draws a dimension line with ticks across its ends.
+- `Viewer3D.Sample`: a "Point cloud" tab, exported as `point-cloud.png`.
 - `Viewer3D`: `MeasureShapes.Dihedral` shows a dihedral angle p-a-b-q: the axis a-b dashed, two dashed arms from its
   middle toward p and q seen along the axis, the arc between them and a label.
 - `Viewer3D.Crystal`, a new optional package: a crystal structure (cell, atoms, bonds) turned into a scene in ball and
