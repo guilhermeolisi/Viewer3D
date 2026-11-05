@@ -328,7 +328,8 @@ scales the time, and `FrameChanged` reports each new frame. The clock is the one
 frames per second, by elapsed time, nothing asked for while paused or outside the visual tree. A camera move does not
 stop the playback. Selection and picking follow the frame on screen, so keep the `Id` of an item the same from frame
 to frame. `LowDetailFrames` (one lighter scene per frame, optional) is painted while the animation plays or the camera
-moves. `FrameScene` frames the union of the bounds of every frame, so the view does not shake.
+moves; give them to a sequence of large frames, since a frame of about 12,000 items takes about 100 ms to render to a
+960 x 720 PNG in software, well under the 30 frames per second of the clock. `FrameScene` frames the union of the bounds of every frame, so the view does not shake.
 
 ```csharp
 var sequence = new SceneSequence(frames, TimeSpan.FromMilliseconds(50), SequenceRepeat.PingPong);

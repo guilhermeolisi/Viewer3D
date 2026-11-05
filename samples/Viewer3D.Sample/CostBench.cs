@@ -21,12 +21,16 @@ internal static class CostBench
         CrystalStructure structure = Scenes.Fluorite();
         var builder = new CrystalSceneBuilder();
         Console.WriteLine($"fluorite, ball and stick, {Width} x {Height}, median of 15 runs (ms, and frames per second of render+png):");
-        Console.WriteLine("asked   block        cost   items     build   prepare   render+png      fps");
+        Console.WriteLine("asked   block      estimate    built   items     build   prepare   render+png      fps");
         foreach (int asked in costs)
         {
-            CrystalSceneOptions options = Block(builder, structure, asked);
+            // Sized by the estimate, built without the ceiling: the faded neighbors count only in the scene built, which
+            // passes the cost asked and would fall back to one cell, measuring the same scene at every cost. A host compares
+            // MaxCost with the cost of the scene built, so that is the column to pick the ceiling from.
+            CrystalSceneOptions options = Block(builder, structure, asked) with { MaxCost = int.MaxValue };
             CrystalScene scene = builder.Build(structure, options);
-            int cost = builder.Estimate(structure, options).Cost;
+            int estimate = builder.Estimate(structure, options).Cost;
+            int built = scene.AtomCount + CrystalSceneOptions.PolyhedronCost * scene.PolyhedronCount;
             var camera = new Camera();
             camera.Frame(scene.Scene);
             camera.Orbit(40, 30);
@@ -38,7 +42,7 @@ internal static class CostBench
             double prepare = EllipsoidBench.Median(() => preparer.Prepare(scene.Scene, camera, Width, Height, list));
             double render = EllipsoidBench.Median(() => control.RenderToPng(Width, Height));
             string block = $"{options.RepeatA} x {options.RepeatB} x {options.RepeatC}";
-            Console.WriteLine($"{asked,5}   {block,-10} {cost,6}   {scene.Scene.Items.Count,6}   {build,7:F2}   {prepare,7:F2}   {render,10:F2}   {1000 / render,6:F1}");
+            Console.WriteLine($"{asked,5}   {block,-10} {estimate,8}   {built,6}   {scene.Scene.Items.Count,5}   {build,7:F2}   {prepare,7:F2}   {render,10:F2}   {1000 / render,6:F1}");
         }
     }
 
