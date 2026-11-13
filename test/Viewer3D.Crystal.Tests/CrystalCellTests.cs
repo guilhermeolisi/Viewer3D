@@ -14,12 +14,16 @@ public class CrystalCellTests
 
         Vector3 a = cell.AVector, b = cell.BVector, c = cell.CVector;
 
-        Assert.Equal(4, a.X, Tolerance);
-        Assert.Equal(0, a.Y, Tolerance);
-        Assert.Equal(0, a.Z, Tolerance);
-        Assert.Equal(0, b.Z, Tolerance);
+        // Triclinic cell in Jarvinen's convention: c along z, b in the yz plane, a with x > 0.
+        // a_z = a cos(beta), a_y = a (cos(gamma) - cos(alpha) cos(beta)) / sin(alpha), a_x = sqrt(a^2 - a_y^2 - a_z^2).
+        Assert.Equal(3.757078, a.X, Tolerance);
+        Assert.Equal(-1.327714, a.Y, Tolerance);
+        Assert.Equal(-0.348623, a.Z, Tolerance);
+        Assert.Equal(0, b.X, Tolerance);
         Assert.True(b.Y > 0);
         Assert.True(c.Z > 0);
+        Assert.Equal(0, c.X, Tolerance);
+        Assert.Equal(0, c.Y, Tolerance);
         Assert.Equal(5, b.Length(), Tolerance);
         Assert.Equal(6, c.Length(), Tolerance);
         Assert.Equal(110, Angle(a, b), 1e-3);

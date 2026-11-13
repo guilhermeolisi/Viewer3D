@@ -352,10 +352,10 @@ internal static class Scenes
             RepeatC = 2,
         });
         CrystalCell cell = structure.Cell;
-        // The reciprocal vectors a* = (b x c)/V and so on (CrystalCell.AStar is only the unit direction), g = a* + b* + c*.
-        Vector3 a = cell.AVector, b = cell.BVector, c = cell.CVector;
-        float volume = Vector3.Dot(a, Vector3.Cross(b, c));
-        Vector3 g = (Vector3.Cross(b, c) + Vector3.Cross(c, a) + Vector3.Cross(a, b)) / volume;
+        // The reciprocal vectors a*, b* and c* (CrystalCell.AStar is only the unit direction), g = a* + b* + c*.
+        Span<double> r = stackalloc double[9];
+        cell.CopyReciprocalBasisTo(r);
+        var g = new Vector3((float)(r[0] + r[3] + r[6]), (float)(r[1] + r[4] + r[7]), (float)(r[2] + r[5] + r[8]));
         Vector3 n = Vector3.Normalize(g);
         float d = 1 / g.Length();
         var block = new CellBox(Vector3.Zero, 2 * cell.AVector, 2 * cell.BVector, 2 * cell.CVector);
@@ -425,7 +425,7 @@ internal static class Scenes
     public static CrystalStructure Fluorite()
     {
         const double a = 5.463;
-        var cell = new CrystalCell(a, a, a, 90, 90, 90);
+        var cell = CrystalCell.FromParameters(a, a, a, 90, 90, 90, CrystalLattice.Cubic);
         var atoms = new List<CrystalAtom>();
         foreach ((double x, double y, double z) in new[] { (0, 0, 0), (0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0.0) })
             atoms.Add(new CrystalAtom("Ca1", "Ca", x, y, z) { SiteIndex = 0, Radius = 1.12 });
@@ -445,7 +445,7 @@ internal static class Scenes
                             bonds.Add(new CrystalBond(0, f, new LatticeShift(i, j, k)));
                     }
         var structure = new CrystalStructure(cell, atoms, bonds);
-        // O cubo de cada Ca, escrito a mao: o vertice b tem o bit 0 em x, o 1 em y e o 2 em z (1 = +1/4, 0 = -1/4).
+        // The cube around each Ca, written by hand: vertex b has bit 0 in x, bit 1 in y and bit 2 in z (1 = +1/4, 0 = -1/4).
         int[][] faces = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
         var polyhedra = new List<CrystalPolyhedron>();
         for (int ca = 0; ca < 4; ca++)
@@ -471,7 +471,7 @@ internal static class Scenes
     public static Viewer3DControl SphereCrystal()
     {
         const double a = 5.64;
-        var cell = new CrystalCell(a, a, a, 90, 90, 90);
+        var cell = CrystalCell.FromParameters(a, a, a, 90, 90, 90, CrystalLattice.Cubic);
         (double, double, double)[] fcc = [(0, 0, 0), (0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0.0)];
         var atoms = new List<CrystalAtom>();
         foreach ((double x, double y, double z) in fcc)

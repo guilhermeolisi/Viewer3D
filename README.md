@@ -114,7 +114,8 @@ reference it.
 ```csharp
 using Viewer3D.Crystal;
 
-var cell = new CrystalCell(5.463, 5.463, 5.463, 90, 90, 90);       // angstrom and degrees
+var cell = CrystalCell.FromParameters(5.463, 5.463, 5.463, 90, 90, 90, CrystalLattice.Cubic); // angstrom and degrees
+// or, with the edge vectors of your own frame: CrystalCell.FromBasis([ax, ay, az, bx, by, bz, cx, cy, cz])
 CrystalAtom[] atoms = [new("Ca1", "Ca", 0, 0, 0) { SiteIndex = 0 }, /* every position, one by one */];
 CrystalBond[] bonds = [new(0, 4, LatticeShift.Zero), /* second atom translated by the shift */];
 var structure = new CrystalStructure(cell, atoms, bonds);
@@ -135,7 +136,13 @@ CrystalItemInfo? info = scene.Lookup(pickedId);  // which atom or bond a sphere 
   position listed (the layer does not apply symmetry), and the bonds as pairs of atom indices with a cell
   translation. An atom can carry its own radius, the elements sharing its position (`Shares`) and its occupancy; a
   shared or partly occupied position is painted in sectors.
-- **Frame.** a along x, b in the xy plane, c on the side of +z, in angstrom.
+- **Frame.** The cell is three Cartesian edge vectors in angstrom, kept as given: `CrystalCell.FromBasis` takes them
+  from the owner's own frame, and the scene, the displacement tensors and the annotations are all in that frame.
+  `CrystalCell.FromParameters` builds them from (a, b, c, α, β, γ) in the frame of M. Järvinen, J. Appl. Cryst. 26
+  (1993) 525-531, arranged per `CrystalLattice` (triclinic: c along z, b in the yz plane; monoclinic: the unique axis
+  along z; orthorhombic, tetragonal and cubic: a, b and c along x, y and z; hexagonal: b along y, c along z;
+  rhombohedral: [111] along z). The constructor with six parameters is the triclinic arrangement.
+  `CopyReciprocalBasisTo` gives a*, b* and c* (no 2π), the rows of the inverse.
 - **Block.** Positions are reduced to the cell; `ShowBoundaryAtoms` adds the atoms on the far faces of the block,
   and `CompleteCoordination` draws the bonded neighbors outside it as faded spheres. The cell edges are drawn once
   each; the axes go to the axis indicator only. A block past the cost ceiling falls back to one cell, with a `Warning`.

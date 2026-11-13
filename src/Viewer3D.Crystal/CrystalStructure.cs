@@ -78,8 +78,8 @@ public sealed record CrystalAtom(string Label, string Element, double X, double 
 public sealed record CrystalAtomGroup(string Label, Rgba Color);
 
 /// <summary>
-/// One displacement tensor of an atom, in the Cartesian frame of <see cref="CrystalCell"/> (a along x, b in the xy
-/// plane), in square angstrom.
+/// One displacement tensor of an atom, in the Cartesian frame of the edge vectors of <see cref="CrystalCell"/>, in
+/// square angstrom.
 /// </summary>
 /// <param name="Element">Element the tensor belongs to, which picks the color; null takes the color of the atom.</param>
 /// <param name="Cartesian6">U11, U22, U33, U12, U13 and U23; null when there is no data for this atom.</param>
@@ -145,8 +145,7 @@ public sealed record CrystalStructure(CrystalCell Cell, IReadOnlyList<CrystalAto
     public IReadOnlyList<CrystalAtomGroup> Groups { get; init; } = [];
 
     /// <summary>
-    /// Items drawn over the structure, in the Cartesian frame of <see cref="CrystalCell"/> (a along x, b in the xy plane):
-    /// lines, arrows, planes and labels that point at something in the structure. Their <see cref="SceneItem.Id"/> is
+    /// Items drawn over the structure, in the Cartesian frame of the edge vectors of <see cref="CrystalCell"/>: lines, arrows, planes and labels that point at something in the structure. Their <see cref="SceneItem.Id"/> is
     /// the owner's and must be negative, so it never meets the ids of the atoms, rods and polyhedra; picking one reports
     /// <see cref="CrystalItemKind.Annotation"/>. Hidden by <see cref="CrystalAppearance.ShowAnnotations"/>.
     /// </summary>

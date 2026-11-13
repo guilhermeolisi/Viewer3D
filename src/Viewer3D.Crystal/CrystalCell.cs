@@ -3,23 +3,65 @@ using System.Numerics;
 namespace Viewer3D.Crystal;
 
 /// <summary>
-/// A unit cell: edges in angstrom and angles in degrees. The Cartesian frame puts a along x, b in the xy plane and c on
-/// the side of +z (the upper triangular basis used for anisotropic displacement parameters), so the scene is in
-/// angstrom.
+/// A unit cell: three edge vectors a, b and c in a Cartesian frame, in angstrom, kept as they were given, with the
+/// edges (angstrom) and angles (degrees) they make. The scene is drawn in that frame, so a caller that has its own
+/// convention for the axes passes the vectors with <see cref="FromBasis"/>; <see cref="FromParameters"/> builds them
+/// from the six parameters in the frame of M. Järvinen, J. Appl. Cryst. 26 (1993) 525-531. The constructor with the
+/// six parameters uses the <see cref="CrystalLattice.Triclinic"/> arrangement, and so does a <c>with</c> that changes a
+/// parameter. Two cells are equal when their vectors are equal.
 /// </summary>
-public sealed record CrystalCell(double A, double B, double C, double Alpha, double Beta, double Gamma)
+public sealed record CrystalCell
 {
+    readonly double a, b, c, alpha, beta, gamma;
+    readonly CellBasis basis;
+
     /// <summary>
-    /// True when the edges are positive and the angles make a cell with volume. Every other member returns zero vectors
-    /// for an invalid cell.
+    /// The cell of the six parameters, in the <see cref="CrystalLattice.Triclinic"/> arrangement of
+    /// <see cref="FromParameters"/>: c along z, b in the yz plane.
     /// </summary>
-    public bool IsValid => Basis().Valid;
+    public CrystalCell(double A, double B, double C, double Alpha, double Beta, double Gamma)
+        : this(A, B, C, Alpha, Beta, Gamma, CellBasis.FromParameters(A, B, C, Alpha, Beta, Gamma, CrystalLattice.Triclinic))
+    {
+    }
+
+    CrystalCell(double a, double b, double c, double alpha, double beta, double gamma, CellBasis basis)
+    {
+        (this.a, this.b, this.c, this.alpha, this.beta, this.gamma) = (a, b, c, alpha, beta, gamma);
+        this.basis = basis;
+    }
+
+    /// <summary>Length of a, in angstrom.</summary>
+    public double A { get => a; init { a = value; basis = Rebuilt(); } }
+
+    /// <summary>Length of b, in angstrom.</summary>
+    public double B { get => b; init { b = value; basis = Rebuilt(); } }
+
+    /// <summary>Length of c, in angstrom.</summary>
+    public double C { get => c; init { c = value; basis = Rebuilt(); } }
+
+    /// <summary>Angle between b and c, in degrees.</summary>
+    public double Alpha { get => alpha; init { alpha = value; basis = Rebuilt(); } }
+
+    /// <summary>Angle between a and c, in degrees.</summary>
+    public double Beta { get => beta; init { beta = value; basis = Rebuilt(); } }
+
+    /// <summary>Angle between a and b, in degrees.</summary>
+    public double Gamma { get => gamma; init { gamma = value; basis = Rebuilt(); } }
+
+    // A parameter changed by a with: the vectors are built again from the six parameters, in the triclinic arrangement.
+    CellBasis Rebuilt() => CellBasis.FromParameters(a, b, c, alpha, beta, gamma, CrystalLattice.Triclinic);
+
+    /// <summary>
+    /// True when the vectors are finite, right-handed and make a cell with volume. Every other member returns zero
+    /// vectors for an invalid cell.
+    /// </summary>
+    public bool IsValid => basis.Valid;
 
     /// <summary>Cartesian position, in angstrom, of the fractional coordinates (x, y, z).</summary>
-    public Vector3 ToCartesian(double x, double y, double z) => Basis().ToCartesian(x, y, z);
+    public Vector3 ToCartesian(double x, double y, double z) => basis.ToCartesian(x, y, z);
 
     /// <summary>Fractional coordinates of a Cartesian point in angstrom, without reducing it into the cell.</summary>
-    public (double X, double Y, double Z) ToFractional(double x, double y, double z) => Basis().ToFractional(x, y, z);
+    public (double X, double Y, double Z) ToFractional(double x, double y, double z) => basis.ToFractional(x, y, z);
 
     /// <summary>The a edge as a Cartesian vector.</summary>
     public Vector3 AVector => ToCartesian(1, 0, 0);
@@ -31,59 +73,95 @@ public sealed record CrystalCell(double A, double B, double C, double Alpha, dou
     public Vector3 CVector => ToCartesian(0, 0, 1);
 
     /// <summary>Unit vector along the reciprocal axis a*, perpendicular to b and c.</summary>
-    public Vector3 AStar => Reciprocal(BVector, CVector);
+    public Vector3 AStar => basis.ReciprocalDirection(0);
 
     /// <summary>Unit vector along the reciprocal axis b*, perpendicular to c and a.</summary>
-    public Vector3 BStar => Reciprocal(CVector, AVector);
+    public Vector3 BStar => basis.ReciprocalDirection(1);
 
     /// <summary>Unit vector along the reciprocal axis c*, perpendicular to a and b.</summary>
-    public Vector3 CStar => Reciprocal(AVector, BVector);
-
-    static Vector3 Reciprocal(Vector3 u, Vector3 v)
-    {
-        Vector3 n = Vector3.Cross(u, v);
-        float length = n.Length();
-        return length > 0 ? n / length : Vector3.Zero;
-    }
-
-    /// <summary>The basis matrix, computed once for a loop over many positions.</summary>
-    internal CellBasis Basis() => CellBasis.Create(A, B, C, Alpha, Beta, Gamma);
+    public Vector3 CStar => basis.ReciprocalDirection(2);
 
     /// <summary>
-    /// The cell of three edge vectors given in any Cartesian frame (a simulation box, the lattice of a trajectory): their
-    /// lengths and the angles between them. The cell keeps its own frame, a along x and b in the xy plane, so the vectors
-    /// are taken up to a rotation. Three vectors in left-handed order give the cell of a, b and -c, which holds the same
-    /// points with a right-handed basis. Coplanar vectors give a cell that is not <see cref="IsValid"/>.
+    /// Writes the three edge vectors into <paramref name="destination"/>, nine numbers in angstrom: the components of a,
+    /// then of b, then of c. Zeros for an invalid cell.
+    /// </summary>
+    public void CopyBasisTo(Span<double> destination) => basis.CopyBasisTo(destination);
+
+    /// <summary>
+    /// Writes the reciprocal vectors a*, b* and c* (the rows of the inverse of the matrix whose columns are a, b and c,
+    /// without the factor 2π) into <paramref name="destination"/>, nine numbers in 1/angstrom: the components of a*,
+    /// then of b*, then of c*. The normal of the plane (hkl) is h a* + k b* + l c*. Zeros for an invalid cell.
+    /// </summary>
+    public void CopyReciprocalBasisTo(Span<double> destination) => basis.CopyReciprocalBasisTo(destination);
+
+    /// <summary>The basis matrix and its inverse, for a loop over many positions.</summary>
+    internal CellBasis Basis() => basis;
+
+    /// <summary>
+    /// The cell of three edge vectors, nine numbers in angstrom: the components of a, then of b, then of c. The vectors
+    /// are kept as given, without a rotation. They must be right-handed (a · (b × c) &gt; 0); left-handed, coplanar or
+    /// not finite vectors give a cell that is not <see cref="IsValid"/>.
+    /// </summary>
+    public static CrystalCell FromBasis(ReadOnlySpan<double> basis)
+    {
+        if (basis.Length != 9)
+            throw new ArgumentException("The basis has nine numbers: the components of a, then of b, then of c.", nameof(basis));
+        (double a, double b, double c, double alpha, double beta, double gamma) = CellBasis.Parameters(basis);
+        return new CrystalCell(a, b, c, alpha, beta, gamma, CellBasis.FromVectors(basis));
+    }
+
+    /// <summary>
+    /// The cell of the six parameters (edges in angstrom, angles in degrees), with the edge vectors in the frame of
+    /// M. Järvinen, J. Appl. Cryst. 26 (1993) 525-531, arranged for <paramref name="lattice"/>. The arrangement reads
+    /// only the parameters its lattice leaves free (see <see cref="CrystalLattice"/>); the cell keeps the six as given.
+    /// The cosines of 90 and 120 degrees are exact, so a right angle has no rounding residue.
+    /// </summary>
+    public static CrystalCell FromParameters(double a, double b, double c, double alpha, double beta, double gamma, CrystalLattice lattice)
+        => new(a, b, c, alpha, beta, gamma, CellBasis.FromParameters(a, b, c, alpha, beta, gamma, lattice));
+
+    /// <summary>
+    /// The cell of three edge vectors given in any Cartesian frame (a simulation box, the lattice of a trajectory),
+    /// kept as given. Three vectors in left-handed order give the cell of a, b and -c, which holds the same points with
+    /// a right-handed basis. Coplanar vectors give a cell that is not <see cref="IsValid"/>.
     /// </summary>
     public static CrystalCell FromVectors(Vector3 a, Vector3 b, Vector3 c)
         => LatticeFrame.Create([a.X, a.Y, a.Z, b.X, b.Y, b.Z, c.X, c.Y, c.Z]).Cell;
+
+    /// <summary>Equal when both are valid with the same vectors, or both invalid with the same parameters.</summary>
+    public bool Equals(CrystalCell? other)
+    {
+        if (other is null)
+            return false;
+        if (ReferenceEquals(this, other))
+            return true;
+        if (basis.Valid != other.basis.Valid)
+            return false;
+        return basis.Valid
+            ? basis.SameVectors(other.basis)
+            : a.Equals(other.a) && b.Equals(other.b) && c.Equals(other.c) && alpha.Equals(other.alpha)
+                && beta.Equals(other.beta) && gamma.Equals(other.gamma);
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => basis.Valid ? basis.VectorsHashCode() : HashCode.Combine(a, b, c, alpha, beta, gamma);
 }
 
 /// <summary>
-/// Three edge vectors in a Cartesian frame of their own, in double precision: the <see cref="CrystalCell"/> they make and
-/// the fractional coordinates of a Cartesian position in that frame, by the inverse of the matrix of the vectors as
-/// given. When the vectors are left-handed, c is reversed (and with it the third fractional coordinate), so the cell
-/// is right-handed and the points are the same.
+/// Three edge vectors in a Cartesian frame of their own, in double precision: the <see cref="CrystalCell"/> they make
+/// and the fractional coordinates of a Cartesian position in that cell. When the vectors are left-handed, c is reversed
+/// (and with it the third fractional coordinate), so the cell is right-handed and the points are the same.
 /// </summary>
 internal readonly struct LatticeFrame
 {
-    // Inverse of the matrix whose columns are a, b and c as given, row by row.
-    readonly double i00, i01, i02, i10, i11, i12, i20, i21, i22;
-
-    LatticeFrame(CrystalCell cell, bool reversed, double[] inverse)
+    LatticeFrame(CrystalCell cell, bool reversed)
     {
         Cell = cell;
         Reversed = reversed;
-        (i00, i01, i02, i10, i11, i12, i20, i21, i22) =
-            (inverse[0], inverse[1], inverse[2], inverse[3], inverse[4], inverse[5], inverse[6], inverse[7], inverse[8]);
-        Valid = true;
     }
 
-    // Vectors without volume: the cell, which is not valid, and nothing else.
-    LatticeFrame(CrystalCell cell) => Cell = cell;
-
     /// <summary>False for vectors that are coplanar, too short or not finite.</summary>
-    public bool Valid { get; }
+    public bool Valid => Cell.IsValid;
 
     /// <summary>The cell of the vectors, right-handed.</summary>
     public CrystalCell Cell { get; }
@@ -94,110 +172,195 @@ internal readonly struct LatticeFrame
     /// <summary>The frame of a, b and c, nine numbers: the three components of a, then of b, then of c.</summary>
     public static LatticeFrame Create(ReadOnlySpan<double> v)
     {
-        double ax = v[0], ay = v[1], az = v[2], bx = v[3], by = v[4], bz = v[5], cx = v[6], cy = v[7], cz = v[8];
-        double la = Math.Sqrt(ax * ax + ay * ay + az * az);
-        double lb = Math.Sqrt(bx * bx + by * by + bz * bz);
-        double lc = Math.Sqrt(cx * cx + cy * cy + cz * cz);
-        // Determinant = a . (b x c), the signed volume.
-        double det = ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
-        bool reversed = det < 0;
-        double sign = reversed ? -1 : 1;
-        var cell = new CrystalCell(la, lb, lc,
-            Angle(bx, by, bz, sign * cx, sign * cy, sign * cz, lb, lc),
-            Angle(ax, ay, az, sign * cx, sign * cy, sign * cz, la, lc),
-            Angle(ax, ay, az, bx, by, bz, la, lb));
-        if (!double.IsFinite(det) || !cell.IsValid)
-            return new LatticeFrame(cell);
-        // Inverse by the adjugate: the rows are b x c, c x a and a x b over the determinant.
-        double[] inverse =
-        [
-            (by * cz - bz * cy) / det, (bz * cx - bx * cz) / det, (bx * cy - by * cx) / det,
-            (cy * az - cz * ay) / det, (cz * ax - cx * az) / det, (cx * ay - cy * ax) / det,
-            (ay * bz - az * by) / det, (az * bx - ax * bz) / det, (ax * by - ay * bx) / det,
-        ];
+        Span<double> vectors = stackalloc double[9];
+        v[..9].CopyTo(vectors);
+        bool reversed = CellBasis.Determinant(vectors) < 0;
         if (reversed)
         {
-            inverse[6] = -inverse[6];
-            inverse[7] = -inverse[7];
-            inverse[8] = -inverse[8];
+            vectors[6] = -vectors[6];
+            vectors[7] = -vectors[7];
+            vectors[8] = -vectors[8];
         }
-        return new LatticeFrame(cell, reversed, inverse);
+        return new LatticeFrame(CrystalCell.FromBasis(vectors), reversed);
     }
 
     /// <summary>Fractional coordinates, in <see cref="Cell"/>, of a Cartesian position in the frame of the vectors.</summary>
-    public (double X, double Y, double Z) ToFractional(double x, double y, double z)
-        => (i00 * x + i01 * y + i02 * z, i10 * x + i11 * y + i12 * z, i20 * x + i21 * y + i22 * z);
-
-    static double Angle(double ux, double uy, double uz, double vx, double vy, double vz, double lu, double lv)
-    {
-        double cos = (ux * vx + uy * vy + uz * vz) / (lu * lv);
-        return Math.Acos(Math.Clamp(cos, -1, 1)) * 180 / Math.PI;
-    }
+    public (double X, double Y, double Z) ToFractional(double x, double y, double z) => Cell.ToFractional(x, y, z);
 }
 
 /// <summary>
-/// The upper triangular basis of a cell, in double precision: columns are a, b and c. Distances compared within 1e-4
-/// angstrom go through here, not through <see cref="Vector3"/>.
+/// The basis matrix of a cell, in double precision, with its inverse: the columns of the matrix are a, b and c, and the
+/// rows of the inverse are a*, b* and c*. Distances compared within 1e-4 angstrom go through here, not through
+/// <see cref="Vector3"/>.
 /// </summary>
 internal readonly struct CellBasis
 {
-    readonly double m00, m01, m02, m11, m12, m22;
+    // The matrix, row by row: column j is edge j (a, b, c).
+    readonly double m00, m01, m02, m10, m11, m12, m20, m21, m22;
+
+    // The inverse, row by row: row i is the reciprocal vector i (a*, b*, c*).
+    readonly double n00, n01, n02, n10, n11, n12, n20, n21, n22;
 
     public bool Valid { get; }
 
     /// <summary>Shortest of the three edges; zero for an invalid cell.</summary>
     public double MinEdge { get; }
 
-    /// <summary>Cell volume, in cubic angstrom (the product of the diagonal); zero for an invalid cell.</summary>
-    public double Volume => m00 * m11 * m22;
+    /// <summary>Cell volume, in cubic angstrom (the determinant of the matrix); zero for an invalid cell.</summary>
+    public double Volume { get; }
 
-    CellBasis(double m00, double m01, double m02, double m11, double m12, double m22, double minEdge)
+    // Below this square of V / (|a| |b| |c|) the cell is taken as flat: the angles of a cell that thin are a rounding
+    // residue, not a lattice.
+    const double FlatRatioSquared = 1e-6;
+
+    CellBasis(ReadOnlySpan<double> v, double volume, double minEdge)
     {
-        this.m00 = m00;
-        this.m01 = m01;
-        this.m02 = m02;
-        this.m11 = m11;
-        this.m12 = m12;
-        this.m22 = m22;
+        double ax = v[0], ay = v[1], az = v[2], bx = v[3], by = v[4], bz = v[5], cx = v[6], cy = v[7], cz = v[8];
+        (m00, m10, m20, m01, m11, m21, m02, m12, m22) = (ax, ay, az, bx, by, bz, cx, cy, cz);
+        // Inverse by the adjugate: the rows are b x c, c x a and a x b over the determinant.
+        (n00, n01, n02) = ((by * cz - bz * cy) / volume, (bz * cx - bx * cz) / volume, (bx * cy - by * cx) / volume);
+        (n10, n11, n12) = ((cy * az - cz * ay) / volume, (cz * ax - cx * az) / volume, (cx * ay - cy * ax) / volume);
+        (n20, n21, n22) = ((ay * bz - az * by) / volume, (az * bx - ax * bz) / volume, (ax * by - ay * bx) / volume);
+        Volume = volume;
         MinEdge = minEdge;
         Valid = true;
     }
 
-    public static CellBasis Create(double a, double b, double c, double alpha, double beta, double gamma)
+    /// <summary>a · (b × c) of nine numbers, the components of a, then of b, then of c.</summary>
+    public static double Determinant(ReadOnlySpan<double> v)
+        => v[0] * (v[4] * v[8] - v[5] * v[7]) - v[1] * (v[3] * v[8] - v[5] * v[6]) + v[2] * (v[3] * v[7] - v[4] * v[6]);
+
+    /// <summary>The basis of three edge vectors as given; invalid unless they are finite, right-handed and not flat.</summary>
+    public static CellBasis FromVectors(ReadOnlySpan<double> v)
     {
-        double ca = Math.Cos(alpha * Math.PI / 180), cb = Math.Cos(beta * Math.PI / 180);
-        double cg = Math.Cos(gamma * Math.PI / 180), sg = Math.Sin(gamma * Math.PI / 180);
-        double root = 1 - ca * ca - cb * cb - cg * cg + 2 * ca * cb * cg;
-        // root e (V/abc)^2; o mesmo corte do motor para cela degenerada.
-        if (!(root > 1e-6) || !(a > 0) || !(b > 0) || !(c > 0) || !(sg > 0) || !double.IsFinite(a * b * c))
+        double volume = Determinant(v);
+        double la = Length(v[0], v[1], v[2]), lb = Length(v[3], v[4], v[5]), lc = Length(v[6], v[7], v[8]);
+        if (!double.IsFinite(volume) || !(volume > 0) || !double.IsFinite(la * lb * lc))
             return default;
-        double volume = a * b * c * Math.Sqrt(root);
-        return new CellBasis(a, b * cg, c * cb, b * sg, c * (ca - cb * cg) / sg, volume / (a * b * sg),
-            Math.Min(a, Math.Min(b, c)));
+        double ratio = volume / (la * lb * lc);
+        if (!(ratio * ratio > FlatRatioSquared))
+            return default;
+        return new CellBasis(v, volume, Math.Min(la, Math.Min(lb, lc)));
     }
 
     /// <summary>
-    /// Lengths of the reciprocal vectors a*, b* and c* (|b x c| / V and its turns), in 1/angstrom: the spacing of the
+    /// The basis of the six parameters in the frame of Järvinen (1993), arranged for <paramref name="lattice"/>.
+    /// </summary>
+    public static CellBasis FromParameters(double a, double b, double c, double alpha, double beta, double gamma, CrystalLattice lattice)
+    {
+        Span<double> v = stackalloc double[9];
+        switch (lattice)
+        {
+            case CrystalLattice.Triclinic:
+                {
+                    double cosAlpha = Cos(alpha), sinAlpha = Sin(alpha, cosAlpha), cosBeta = Cos(beta), cosGamma = Cos(gamma);
+                    // Giacovazzo, Fundamentals of Crystallography, eq. 2.31b: a_y = a (cos γ - cos α cos β) / sin α.
+                    double ay = (cosGamma - cosAlpha * cosBeta) / sinAlpha;
+                    double ax = Math.Sqrt(Math.Max(0, 1 - cosBeta * cosBeta - ay * ay));
+                    Set(v, a * ax, a * ay, a * cosBeta, 0, b * sinAlpha, b * cosAlpha, 0, 0, c);
+                    break;
+                }
+            case CrystalLattice.MonoclinicUniqueB:
+                {
+                    double cosBeta = Cos(beta);
+                    Set(v, 0, a, 0, 0, 0, b, c * Sin(beta, cosBeta), c * cosBeta, 0);
+                    break;
+                }
+            case CrystalLattice.MonoclinicUniqueC:
+                {
+                    double cosGamma = Cos(gamma);
+                    Set(v, a * Sin(gamma, cosGamma), a * cosGamma, 0, 0, b, 0, 0, 0, c);
+                    break;
+                }
+            case CrystalLattice.MonoclinicUniqueA:
+                {
+                    double cosAlpha = Cos(alpha);
+                    Set(v, 0, 0, a, b * Sin(alpha, cosAlpha), b * cosAlpha, 0, 0, c, 0);
+                    break;
+                }
+            case CrystalLattice.Orthorhombic:
+            case CrystalLattice.Tetragonal:
+            case CrystalLattice.Cubic:
+                Set(v, a, 0, 0, 0, b, 0, 0, 0, c);
+                break;
+            case CrystalLattice.Rhombohedral:
+                {
+                    double cosAlpha = Cos(alpha);
+                    double bx = a * Math.Sqrt(2.0 / 3.0 * (1 - cosAlpha));
+                    double bz = a * Math.Sqrt(1 - 2.0 / 3.0 * (1 - cosAlpha));
+                    double half = 0.5 * bx, side = Math.Sqrt(3.0) / 2.0 * bx;
+                    Set(v, -half, -side, bz, bx, 0, bz, -half, side, bz);
+                    break;
+                }
+            case CrystalLattice.Hexagonal:
+                Set(v, a * Sin120, a * -0.5, 0, 0, b, 0, 0, 0, c);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(lattice), lattice, "Unknown lattice.");
+        }
+        return FromVectors(v);
+    }
+
+    /// <summary>Edges (angstrom) and angles (degrees) of three edge vectors, the components of a, then of b, then of c.</summary>
+    public static (double A, double B, double C, double Alpha, double Beta, double Gamma) Parameters(ReadOnlySpan<double> v)
+    {
+        double la = Length(v[0], v[1], v[2]), lb = Length(v[3], v[4], v[5]), lc = Length(v[6], v[7], v[8]);
+        return (la, lb, lc, Angle(v[3], v[4], v[5], v[6], v[7], v[8], lb, lc), Angle(v[0], v[1], v[2], v[6], v[7], v[8], la, lc),
+            Angle(v[0], v[1], v[2], v[3], v[4], v[5], la, lb));
+    }
+
+    // sin 120 degrees, the double nearest sqrt(3) / 2.
+    const double Sin120 = 0.8660254037844386;
+
+    // Exact for the right angle and for 120 degrees, so the cells that have them carry no rounding residue.
+    static double Cos(double degrees) => degrees switch
+    {
+        90.0 => 0,
+        120.0 => -0.5,
+        _ => Math.Cos(degrees * (Math.PI / 180)),
+    };
+
+    // The positive sine of a cell angle, from its cosine; exact for the right angle and for 120 degrees.
+    static double Sin(double degrees, double cos) => degrees == 120.0 ? Sin120 : Math.Sqrt(1 - cos * cos);
+
+    static void Set(Span<double> v, double ax, double ay, double az, double bx, double by, double bz, double cx, double cy, double cz)
+        => (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8]) = (ax, ay, az, bx, by, bz, cx, cy, cz);
+
+    static double Length(double x, double y, double z) => Math.Sqrt(x * x + y * y + z * z);
+
+    static double Angle(double ux, double uy, double uz, double vx, double vy, double vz, double lu, double lv)
+    {
+        double cos = (ux * vx + uy * vy + uz * vz) / (lu * lv);
+        return Math.Acos(Math.Clamp(cos, -1, 1)) * 180 / Math.PI;
+    }
+
+    /// <summary>
+    /// Lengths of the reciprocal vectors a*, b* and c* (the rows of the inverse), in 1/angstrom: the spacing of the
     /// (100), (010) and (001) planes is their inverse. Zero for an invalid cell.
     /// </summary>
     public (double A, double B, double C) ReciprocalLengths()
+        => Valid ? (Length(n00, n01, n02), Length(n10, n11, n12), Length(n20, n21, n22)) : (0, 0, 0);
+
+    /// <summary>Unit vector along the reciprocal vector <paramref name="row"/> (0 for a*, 1 for b*, 2 for c*).</summary>
+    public Vector3 ReciprocalDirection(int row)
     {
         if (!Valid)
-            return (0, 0, 0);
-        double volume = Volume;
-        // a = (m00, 0, 0), b = (m01, m11, 0), c = (m02, m12, m22).
-        double bcx = m11 * m22, bcy = -m01 * m22, bcz = m01 * m12 - m11 * m02;
-        double cay = m22 * m00, caz = -m12 * m00;
-        return (Math.Sqrt(bcx * bcx + bcy * bcy + bcz * bcz) / volume,
-            Math.Sqrt(cay * cay + caz * caz) / volume,
-            1 / m22);
+            return Vector3.Zero;
+        (double x, double y, double z) = row switch
+        {
+            0 => (n00, n01, n02),
+            1 => (n10, n11, n12),
+            _ => (n20, n21, n22),
+        };
+        double length = Length(x, y, z);
+        return new Vector3((float)(x / length), (float)(y / length), (float)(z / length));
     }
 
     public void ToCartesian(double x, double y, double z, out double cx, out double cy, out double cz)
     {
         cx = m00 * x + m01 * y + m02 * z;
-        cy = m11 * y + m12 * z;
-        cz = m22 * z;
+        cy = m10 * x + m11 * y + m12 * z;
+        cz = m20 * x + m21 * y + m22 * z;
     }
 
     public Vector3 ToCartesian(double x, double y, double z)
@@ -212,9 +375,7 @@ internal readonly struct CellBasis
     {
         if (!Valid)
             return (0, 0, 0);
-        double w = z / m22;
-        double v = (y - m12 * w) / m11;
-        return ((x - m01 * v - m02 * w) / m00, v, w);
+        return (n00 * x + n01 * y + n02 * z, n10 * x + n11 * y + n12 * z, n20 * x + n21 * y + n22 * z);
     }
 
     /// <summary>Distance, in angstrom, between two fractional positions.</summary>
@@ -222,5 +383,39 @@ internal readonly struct CellBasis
     {
         ToCartesian(dx, dy, dz, out double cx, out double cy, out double cz);
         return Math.Sqrt(cx * cx + cy * cy + cz * cz);
+    }
+
+    public void CopyBasisTo(Span<double> destination)
+    {
+        if (destination.Length < 9)
+            throw new ArgumentException("The destination holds nine numbers.", nameof(destination));
+        Set(destination, m00, m10, m20, m01, m11, m21, m02, m12, m22);
+    }
+
+    public void CopyReciprocalBasisTo(Span<double> destination)
+    {
+        if (destination.Length < 9)
+            throw new ArgumentException("The destination holds nine numbers.", nameof(destination));
+        Set(destination, n00, n01, n02, n10, n11, n12, n20, n21, n22);
+    }
+
+    public bool SameVectors(in CellBasis other)
+        => m00.Equals(other.m00) && m01.Equals(other.m01) && m02.Equals(other.m02) && m10.Equals(other.m10)
+            && m11.Equals(other.m11) && m12.Equals(other.m12) && m20.Equals(other.m20) && m21.Equals(other.m21)
+            && m22.Equals(other.m22);
+
+    public int VectorsHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(m00);
+        hash.Add(m01);
+        hash.Add(m02);
+        hash.Add(m10);
+        hash.Add(m11);
+        hash.Add(m12);
+        hash.Add(m20);
+        hash.Add(m21);
+        hash.Add(m22);
+        return hash.ToHashCode();
     }
 }

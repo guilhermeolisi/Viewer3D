@@ -130,6 +130,16 @@
   non-pickable polygon per plane with one plane highlighted, and the traces of a plane on the walls of a block of
   cells (`GridSection`). `SceneSlice.Apply` keeps the items of a scene within a slab around a plane and hides or fades
   the others (`SliceMode`).
+- `Viewer3D.Crystal`: a `CrystalCell` is three Cartesian edge vectors, kept as given, and the scene is drawn in their
+  frame. `CrystalCell.FromBasis` takes the vectors (nine numbers; right-handed, or the cell is not valid), and
+  `CrystalCell.FromParameters` builds them from the six parameters in the frame of M. Järvinen, J. Appl. Cryst. 26
+  (1993) 525-531, arranged per `CrystalLattice` (triclinic, the three monoclinic settings, orthorhombic, tetragonal,
+  rhombohedral, hexagonal, cubic), with exact cosines for 90 and 120 degrees. The constructor with six parameters is
+  now the triclinic arrangement (c along z, b in the yz plane) instead of a along x and b in the xy plane: positions,
+  displacement tensors and annotations given in the old frame have to be rotated. `CopyBasisTo` and
+  `CopyReciprocalBasisTo` give the vectors and a*, b*, c*; two cells are equal when their vectors are.
+  `CrystalCell.FromVectors` and the trajectory readers keep the vectors as given (a left-handed set still has c
+  reversed, with the warning) instead of turning them to a along x.
 
 ## 0.1.0 - 10/17/2026
 
