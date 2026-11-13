@@ -272,4 +272,34 @@ public class AxsfReaderTests
         for (int k = 0; k < water.Frames.Count; k++)
             Assert.Equal(2, TrajectoryBonds.InFrame(builder, water.Frames[k], options, waterFrames.Frames[k]));
     }
+
+    [Fact]
+    public void SkewedBox_IsKeptAsGiven_WithoutTurningItTowardTheAxes()
+    {
+        // A box turned away from every axis (a not along x, b not in the xy plane), right-handed: a . (b x c) = 64.9.
+        // The second atom sits at 0.25 a + 0.5 b + 0.75 c, written in Cartesian.
+        const string skewed = """
+            CRYSTAL
+            PRIMVEC
+              3.0  1.0  0.5
+             -1.0  4.0  0.2
+              0.3 -0.4  5.0
+            PRIMCOORD
+            2 1
+            Si 0.000 0.000 0.000
+            O  0.475 1.950 3.975
+            """;
+
+        CrystalStructure s = Read(skewed).Frames[0].Structure;
+        double[] basis = new double[9];
+        s.Cell.CopyBasisTo(basis);
+
+        // Oraculo: caso limite, the box of the file comes back as written (no rotation), and the atom written in
+        // Cartesian has the fractional coordinates it was built from; the inverse of a 3x3 of order 1 to 1e-12.
+        Assert.Equal([3.0, 1.0, 0.5, -1.0, 4.0, 0.2, 0.3, -0.4, 5.0], basis);
+        Assert.Equal(0.25, s.Atoms[1].X, 1e-12);
+        Assert.Equal(0.5, s.Atoms[1].Y, 1e-12);
+        Assert.Equal(0.75, s.Atoms[1].Z, 1e-12);
+        Assert.Equal(Math.Sqrt(0.475 * 0.475 + 1.95 * 1.95 + 3.975 * 3.975), Distance(s, 0, 1), 1e-12);
+    }
 }

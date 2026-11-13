@@ -205,6 +205,81 @@ public class CrystalLatticeHelperTests
         Assert.Throws<ArgumentException>(() => cell.CopyReciprocalBasisTo(new double[8]));
     }
 
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public void RotatedBasis_ShouldKeepDistancesVolumeAndReciprocal(CrystalLattice lattice, double a, double b, double c,
+        double alpha, double beta, double gamma)
+    {
+        CrystalCell cell = CrystalCell.FromParameters(a, b, c, alpha, beta, gamma, lattice);
+        double[,] r = Rotation(1, 2, 3, 37);
+        double[] m = Vectors(cell);
+        double[] turned = new double[9];
+        for (int edge = 0; edge < 3; edge++)
+            for (int i = 0; i < 3; i++)
+                turned[3 * edge + i] = r[i, 0] * m[3 * edge] + r[i, 1] * m[3 * edge + 1] + r[i, 2] * m[3 * edge + 2];
+
+        CrystalCell rotated = CrystalCell.FromBasis(turned);
+        CellBasis before = cell.Basis(), after = rotated.Basis();
+
+        // Oraculo: caso limite, a proper rotation of the three vectors changes no invariant of the cell. Edges up to
+        // ~10 angstrom and volumes up to ~600 cubic angstrom; the rotation adds a few roundings of order 1e-15 relative.
+        Assert.True(rotated.IsValid);
+        Assert.Equal(cell.A, rotated.A, 1e-12);
+        Assert.Equal(cell.B, rotated.B, 1e-12);
+        Assert.Equal(cell.C, rotated.C, 1e-12);
+        Assert.Equal(cell.Alpha, rotated.Alpha, 1e-10);
+        Assert.Equal(cell.Beta, rotated.Beta, 1e-10);
+        Assert.Equal(cell.Gamma, rotated.Gamma, 1e-10);
+        Assert.Equal(before.Volume, after.Volume, 1e-11);
+        foreach ((double dx, double dy, double dz) in new[] { (1.0, 0.0, 0.0), (0.5, -0.25, 0.75), (1.0, 1.0, 1.0), (-0.3, 0.6, 0.1) })
+            Assert.Equal(before.Distance(dx, dy, dz), after.Distance(dx, dy, dz), 1e-12);
+        (double ra, double rb, double rc) = before.ReciprocalLengths();
+        (double ta, double tb, double tc) = after.ReciprocalLengths();
+        Assert.Equal(ra, ta, 1e-14);
+        Assert.Equal(rb, tb, 1e-14);
+        Assert.Equal(rc, tc, 1e-14);
+
+        // The reciprocal vectors turn with the cell (r*' = R r*), and stay dual to the turned edges.
+        double[] star = new double[9], turnedStar = new double[9];
+        cell.CopyReciprocalBasisTo(star);
+        rotated.CopyReciprocalBasisTo(turnedStar);
+        for (int row = 0; row < 3; row++)
+            for (int i = 0; i < 3; i++)
+            {
+                double expected = r[i, 0] * star[3 * row] + r[i, 1] * star[3 * row + 1] + r[i, 2] * star[3 * row + 2];
+                Assert.Equal(expected, turnedStar[3 * row + i], 1e-13);
+                Assert.Equal(row == i ? 1 : 0, turnedStar[3 * row] * turned[3 * i] + turnedStar[3 * row + 1] * turned[3 * i + 1]
+                    + turnedStar[3 * row + 2] * turned[3 * i + 2], 1e-13);
+            }
+
+        // The single-precision directions a*, b* and c* turn the same way, to the float of a unit vector (~6e-8).
+        Vector3[] directions = [cell.AStar, cell.BStar, cell.CStar];
+        Vector3[] turnedDirections = [rotated.AStar, rotated.BStar, rotated.CStar];
+        for (int row = 0; row < 3; row++)
+        {
+            Vector3 d = directions[row];
+            var expected = new Vector3(
+                (float)(r[0, 0] * d.X + r[0, 1] * d.Y + r[0, 2] * d.Z),
+                (float)(r[1, 0] * d.X + r[1, 1] * d.Y + r[1, 2] * d.Z),
+                (float)(r[2, 0] * d.X + r[2, 1] * d.Y + r[2, 2] * d.Z));
+            Assert.True(Vector3.Distance(expected, turnedDirections[row]) < 1e-6f, $"{turnedDirections[row]} is not {expected}");
+        }
+    }
+
+    // Rotation by the angle (degrees) about the axis (x, y, z), by Rodrigues' formula.
+    static double[,] Rotation(double x, double y, double z, double degrees)
+    {
+        double length = Math.Sqrt(x * x + y * y + z * z);
+        (x, y, z) = (x / length, y / length, z / length);
+        double t = degrees * Math.PI / 180, cos = Math.Cos(t), sin = Math.Sin(t), k = 1 - cos;
+        return new[,]
+        {
+            { cos + x * x * k, x * y * k - z * sin, x * z * k + y * sin },
+            { y * x * k + z * sin, cos + y * y * k, y * z * k - x * sin },
+            { z * x * k - y * sin, z * y * k + x * sin, cos + z * z * k },
+        };
+    }
+
     static double[] Vectors(CrystalCell cell)
     {
         double[] m = new double[9];
