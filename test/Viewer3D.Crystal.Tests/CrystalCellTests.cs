@@ -8,7 +8,7 @@ public class CrystalCellTests
     const double Tolerance = 1e-4;
 
     [Fact]
-    public void ToCartesian_PutsAAlongXAndBInTheXyPlane()
+    public void ToCartesian_PutsCAlongZAndBInTheYzPlane()
     {
         var cell = new CrystalCell(4, 5, 6, 80, 95, 110);
 
